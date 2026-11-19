@@ -1,16 +1,89 @@
 
 <!DOCTYPE html>
-<html>
+<html lang="nl">
 <head>
-    <title>Mijn MTB Training Planner</title>
-</head>
-<body>
-    <h1>MTB Training Planner</h1>
-    <p>Simple version</p>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
 
-    <button onclick="alert('Tijd om te trainen!')">
-        Start training
-    </button>
+    <title>MTB Training Planner</title>
+
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+    <main class="container">
+
+        <h1>MTB Training Planner</h1>
+        <p class="subtitle">
+            Jouw persoonlijke trainingscoach
+        </p>
+
+        <!-- Inlogscherm -->
+
+        <section id="login-section" class="card">
+
+            <h2>Inloggen</h2>
+
+            <form id="login-form">
+
+                <label for="email">E-mailadres</label>
+                <input id="email"
+                       type="email"
+                       autocomplete="email"
+                       required>
+
+                <label for="password">Wachtwoord</label>
+                <input id="password"
+                       type="password"
+                       autocomplete="current-password"
+                       required>
+
+                <button type="submit">
+                    Inloggen
+                </button>
+
+            </form>
+
+        </section>
+
+        <!-- Trainingsdashboard -->
+
+        <section id="dashboard-section" hidden>
+
+            <div class="card">
+
+                <h2>Mijn beschikbaarheid</h2>
+
+                <p id="user-email"></p>
+
+                <h3 id="total-hours">
+                    0 uur per week
+                </h3>
+
+                <div id="availability-list"></div>
+
+                <button id="save-button" disabled>
+                    Beschikbaarheid opslaan
+                </button>
+
+            </div>
+
+            <button id="logout-button"
+                    class="secondary">
+                Uitloggen
+            </button>
+
+        </section>
+
+        <p id="status-message"
+           role="status"
+           aria-live="polite"></p>
+
+    </main>
+
+    <script type="module" src="app.js"></script>
+
 </body>
 </html>
-
