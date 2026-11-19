@@ -1,0 +1,131 @@
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background: #f2f5f4;
+    color: #24332d;
+}
+
+.container {
+    max-width: 650px;
+    margin: 30px auto;
+    padding: 16px;
+}
+
+h1 {
+    color: #207653;
+    margin-bottom: 6px;
+}
+
+.subtitle {
+    color: #68776f;
+    margin-bottom: 28px;
+}
+
+.card {
+    background: white;
+    border-radius: 14px;
+    padding: 24px;
+    margin-bottom: 20px;
+    box-shadow: 0 3px 15px #0000000d;
+}
+
+label {
+    display: block;
+    margin-bottom: 6px;
+    font-weight: bold;
+}
+
+input {
+    width: 100%;
+    padding: 12px;
+    margin-bottom: 18px;
+    border: 1px solid #ccd5d0;
+    border-radius: 8px;
+    font-size: 16px;
+}
+
+button {
+    width: 100%;
+    padding: 13px;
+    background: #207653;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    cursor: pointer;
+}
+
+button:hover {
+    background: #175a3f;
+}
+
+button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+button.secondary {
+    background: #e1e8e3;
+    color: #24332d;
+}
+
+.day-row {
+    display: grid;
+    grid-template-columns: 1fr 90px;
+    align-items: center;
+    gap: 12px;
+    border-bottom: 1px solid #edf0ee;
+    padding: 12px 0;
+}
+
+.day-row input {
+    margin: 0;
+    text-align: center;
+}
+
+.fixed-workout {
+    grid-column: 1 / -1;
+    color: #207653;
+    font-size: 13px;
+}
+
+#total-hours {
+    font-size: 26px;
+    color: #207653;
+}
+
+#save-button {
+    margin-top: 20px;
+}
+
+#status-message {
+    text-align: center;
+    overflow-wrap: anywhere;
+}
+
+#status-message.error {
+    color: #b42318;
+}
+
+#status-message.success {
+    color: #207653;
+}
+
+[hidden] {
+    display: none !important;
+}
+
+@media (max-width: 480px) {
+    .container {
+        margin: 10px auto;
+    }
+
+    .card {
+        padding: 18px;
+    }
+}
