@@ -1,0 +1,85 @@
+
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <title>Availability tests</title>
+</head>
+<body>
+
+<h1>Availability unit tests</h1>
+
+<pre id="results"></pre>
+
+<script type="module">
+
+import {
+    generateDays,
+    buildAvailability,
+    totalMinutes
+} from '../availability.js';
+
+function test(name, condition) {
+    document.getElementById('results')
+        .textContent +=
+        `${condition ? 'PASS' : 'FAIL'} - ${name}\n`;
+}
+
+const days = generateDays(
+    new Date(2026, 10, 23), 3
+);
+
+const weekly = [
+    {
+        weekday: 'Maandag',
+        available_minutes: 0
+    },
+    {
+        weekday: 'Dinsdag',
+        available_minutes: 90
+    },
+    {
+        weekday: 'Woensdag',
+        available_minutes: 120
+    }
+];
+
+const overrides = [
+    {
+        date: '2026-11-25',
+        available_minutes: 0,
+        fixed_workout: null
+    }
+];
+
+const result = buildAvailability(
+    days, weekly, overrides
+);
+
+test('Three days generated',
+    days.length === 3);
+
+test('Correct first date',
+    days[0].date === '2026-11-23');
+
+test('Normal Tuesday availability',
+    result[1].availableMinutes === 90);
+
+test('Zero-minute override works',
+    result[2].availableMinutes === 0);
+
+test('Override recognized',
+    result[2].isOverride === true);
+
+test('Total minutes correct',
+    totalMinutes(result) === 90);
+
+test('Month transition works',
+    generateDays(
+        new Date(2026, 10, 30), 2
+    )[1].date === '2026-12-01');
+
+</script>
+
+</body>
+</html>
