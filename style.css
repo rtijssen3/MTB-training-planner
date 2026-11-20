@@ -129,3 +129,333 @@ button.secondary {
         padding: 18px;
     }
 }
+
+
+/* ====================================
+   CALENDAR V0.2
+   ==================================== */
+
+.container {
+    max-width: 760px;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+.calendar-week {
+    margin-bottom: 24px;
+}
+
+.week-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.week-heading {
+    font-weight: 600;
+}
+
+.week-period {
+    font-size: 0.8rem;
+    color: #777;
+    margin-top: 4px;
+}
+
+.week-total {
+    text-align: right;
+    font-weight: 600;
+    color: #207653;
+    white-space: nowrap;
+}
+
+.week-standard {
+    font-size: 0.75rem;
+    font-weight: normal;
+    color: #777;
+    margin-top: 4px;
+}
+
+
+/* Zeven kalenderkolommen */
+
+.week-grid {
+    display: grid;
+    grid-template-columns:
+        repeat(7, minmax(0, 1fr));
+    gap: 6px;
+}
+
+
+/* Kalenderdag */
+
+.calendar-day {
+    width: 100%;
+    min-width: 0;
+    min-height: 108px;
+    margin: 0;
+    padding: 8px 2px;
+
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+
+    background: #f2f5f4;
+    color: #26332e;
+
+    border: 2px solid transparent;
+    border-radius: 10px;
+
+    cursor: pointer;
+    font: inherit;
+}
+
+.calendar-day:hover:not(:disabled) {
+    filter: brightness(0.97);
+}
+
+.day-name {
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.day-date {
+    font-size: 0.75rem;
+    color: #666;
+}
+
+.day-value {
+    font-size: 1.1rem;
+    font-weight: 700;
+}
+
+.day-unit {
+    font-size: 0.7rem;
+    color: #666;
+}
+
+.day-indicator {
+    min-height: 14px;
+    font-size: 0.65rem;
+}
+
+
+/* Statuskleuren */
+
+.calendar-day.override,
+.legend-dot.override {
+    background: #fff0d1;
+    color: #925b00;
+}
+
+.calendar-day.pending,
+.legend-dot.pending {
+    background: #dcecff;
+    color: #205ba4;
+}
+
+.calendar-day.past,
+.legend-dot.past {
+    background: #ececec;
+    color: #999;
+}
+
+.calendar-day.past {
+    cursor: not-allowed;
+    opacity: 1;
+}
+
+.calendar-day.past .day-date,
+.calendar-day.past .day-unit {
+    color: #999;
+}
+
+.calendar-day.today {
+    box-shadow: inset 0 3px 0 #207653;
+}
+
+.calendar-day.selected {
+    border-color: #207653;
+}
+
+.calendar-day.pending.selected {
+    border-color: #408cde;
+}
+
+
+/* Legenda */
+
+.calendar-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 16px;
+    font-size: 0.75rem;
+    color: #666;
+    margin: 16px 0;
+}
+
+.calendar-legend span {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.legend-dot {
+    width: 11px;
+    height: 11px;
+    border-radius: 3px;
+    display: inline-block;
+}
+
+.legend-dot.standard {
+    background: #e3ebe7;
+}
+
+
+/* Dagbewerking */
+
+.day-editor {
+    border-top: 1px solid #dedede;
+    padding-top: 16px;
+    margin-top: 16px;
+}
+
+.day-editor h3 {
+    margin-top: 0;
+}
+
+#minutes-output {
+    display: block;
+    font-size: 1.6rem;
+    font-weight: 600;
+    color: #207653;
+    text-align: right;
+}
+
+#day-minutes {
+    width: 100%;
+    accent-color: #207653;
+    padding: 0;
+    cursor: pointer;
+}
+
+.slider-labels {
+    display: flex;
+    justify-content: space-between;
+    color: #777;
+    font-size: 0.75rem;
+    margin-bottom: 18px;
+}
+
+.muted {
+    color: #666;
+    font-size: 0.85rem;
+}
+
+#day-workout,
+#day-minutes-number {
+    width: 100%;
+}
+
+.calendar-actions {
+    border-top: 1px solid #dedede;
+    margin-top: 20px;
+    padding-top: 16px;
+}
+
+#pending-count {
+    color: #408cde;
+    font-weight: 600;
+}
+
+details.card summary {
+    cursor: pointer;
+    font-weight: 600;
+}
+
+button:disabled {
+    cursor: not-allowed;
+}
+
+
+/* Mobiele weergave */
+
+@media (max-width: 480px) {
+
+    .container {
+        padding: 10px;
+    }
+
+    .card {
+        padding: 14px;
+    }
+
+    .week-grid {
+        gap: 3px;
+    }
+
+    .calendar-day {
+        min-height: 94px;
+        border-radius: 7px;
+        padding: 5px 1px;
+    }
+
+    .day-name,
+    .day-date {
+        font-size: 0.68rem;
+    }
+
+    .day-value {
+        font-size: 0.95rem;
+    }
+
+    .day-indicator,
+    .day-unit {
+        font-size: 0.6rem;
+    }
+
+    .week-heading {
+        font-size: 0.9rem;
+    }
+}
+
+/* Verbeterde statusmeldingen */
+
+#status-message:empty {
+    display: none;
+}
+
+#status-message {
+    position: sticky;
+    bottom: 12px;
+    z-index: 100;
+
+    padding: 12px 16px;
+    border-radius: 8px;
+
+    background: #eef4f1;
+    color: #26332e;
+
+    box-shadow:
+        0 2px 12px rgba(0, 0, 0, 0.12);
+
+    font-size: 0.9rem;
+    line-height: 1.5;
+}
+
+#status-message.error {
+    background: #fce5e5;
+    color: #992727;
+    border: 1px solid #e0aaaa;
+}
+
+#status-message.success {
+    background: #e1f2e8;
+    color: #207653;
+    border: 1px solid #b2d9c2;
+}

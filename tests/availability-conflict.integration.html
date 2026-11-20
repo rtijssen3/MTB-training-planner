@@ -1,0 +1,302 @@
+
+<!DOCTYPE html>
+<html lang="nl">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <title>Availability conflict test</title>
+
+    <style>
+
+        body {
+            font-family: monospace;
+            padding: 30px;
+            line-height: 1.7;
+        }
+
+        pre {
+            white-space: pre-wrap;
+            background: #f2f2f2;
+            padding: 15px;
+        }
+
+        button {
+            padding: 12px;
+        }
+
+    </style>
+
+</head>
+
+<body>
+
+<h1>Availability conflict integration test</h1>
+
+<button id="run-test">
+    Run conflict test
+</button>
+
+<pre id="results"></pre>
+
+<script type="module">
+
+import {
+    supabase
+} from '../supabase-client.js';
+
+import {
+    fetchRevision,
+    fetchOverrides,
+    saveCalendarChecked
+} from '../availability-api.js';
+
+
+const button =
+    document.getElementById('run-test');
+
+const output =
+    document.getElementById('results');
+
+
+function log(message) {
+
+    output.textContent += message + '\n';
+}
+
+
+button.addEventListener('click', async () => {
+
+    button.disabled = true;
+
+    output.textContent = '';
+
+    const date = '2099-02-01';
+
+    let cleanupRequired = false;
+
+    try {
+
+        // TEST 1: Authenticatie
+
+        const { data, error } =
+            await supabase.auth.getUser();
+
+        if (error) throw error;
+
+        if (!data.user) {
+
+            throw new Error(
+                'Log eerst in op index.html'
+            );
+        }
+
+        const userId = data.user.id;
+
+        log('PASS - Authentication');
+
+
+        // TEST 2: Controleer testdatum
+
+        const existing =
+            await fetchOverrides(
+                userId,
+                date,
+                date
+            );
+
+        if (existing.length !== 0) {
+
+            throw new Error(
+                'Test date already in use'
+            );
+        }
+
+        log('PASS - Test date available');
+
+
+        // Beide apparaten lezen dezelfde revisie.
+
+        const revisionA =
+            await fetchRevision();
+
+        const revisionB = revisionA;
+
+        log('Initial revision: ' + revisionA);
+
+
+        // TEST 3: Apparaat A slaat op.
+
+        const responseA =
+            await saveCalendarChecked(
+                [{
+                    date,
+                    action: 'upsert',
+                    available_minutes: 120,
+                    fixed_workout: null
+                }],
+                revisionA
+            );
+
+        cleanupRequired = true;
+
+        if (
+            responseA.saved_count !== 1 ||
+            responseA.revision <= revisionA
+        ) {
+
+            throw new Error(
+                'Revision not updated'
+            );
+        }
+
+        log('PASS - Device A saves successfully');
+
+        log('PASS - Revision increased');
+
+
+        // TEST 4: Apparaat B gebruikt
+        // de oude revisie.
+
+        let conflictDetected = false;
+
+        try {
+
+            await saveCalendarChecked(
+                [{
+                    date,
+                    action: 'upsert',
+                    available_minutes: 60,
+                    fixed_workout: null
+                }],
+                revisionB
+            );
+
+        } catch (error) {
+
+            if (
+                error.message.includes(
+                    'AVAILABILITY_CONFLICT'
+                )
+            ) {
+
+                conflictDetected = true;
+
+            } else {
+
+                throw error;
+            }
+        }
+
+        if (!conflictDetected) {
+
+            throw new Error(
+                'Stale revision was accepted'
+            );
+        }
+
+        log('PASS - Device B conflict detected');
+
+
+        // TEST 5: Controleer dat de waarde
+        // van apparaat A behouden blijft.
+
+        const records =
+            await fetchOverrides(
+                userId,
+                date,
+                date
+            );
+
+        if (
+            records.length !== 1 ||
+            records[0].available_minutes !== 120
+        ) {
+
+            throw new Error(
+                'Original data was overwritten'
+            );
+        }
+
+        log('PASS - Original value preserved');
+
+
+        // TEST 6: Apparaat B vernieuwt gegevens
+        // en probeert opnieuw.
+
+        const updatedRevision =
+            await fetchRevision();
+
+        await saveCalendarChecked(
+            [{
+                date,
+                action: 'upsert',
+                available_minutes: 60,
+                fixed_workout: null
+            }],
+            updatedRevision
+        );
+
+        const updated =
+            await fetchOverrides(
+                userId,
+                date,
+                date
+            );
+
+        if (
+            updated.length !== 1 ||
+            updated[0].available_minutes !== 60
+        ) {
+
+            throw new Error(
+                'Retry did not update value'
+            );
+        }
+
+        log('PASS - Save after refresh succeeds');
+
+        log('\nAll conflict checks passed.');
+
+    } catch (error) {
+
+        log('\nFAIL - ' + error.message);
+
+    } finally {
+
+        if (cleanupRequired) {
+
+            try {
+
+                const revision =
+                    await fetchRevision();
+
+                await saveCalendarChecked(
+                    [{
+                        date,
+                        action: 'delete'
+                    }],
+                    revision
+                );
+
+                log('PASS - Test record removed');
+
+            } catch (error) {
+
+                log(
+                    'WARNING - Cleanup failed: ' +
+                    error.message
+                );
+            }
+        }
+
+        button.disabled = false;
+    }
+});
+
+</script>
+
+</body>
+
+</html>

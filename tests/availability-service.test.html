@@ -1,0 +1,444 @@
+
+<!DOCTYPE html>
+<html lang="nl">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Availability service tests</title>
+
+    <style>
+        body {
+            font-family: monospace;
+            padding: 30px;
+            line-height: 1.7;
+        }
+
+        .pass { color: green; }
+        .fail { color: red; }
+    </style>
+</head>
+
+<body>
+
+<h1>MTB Planner - Service tests</h1>
+
+<div id="results"></div>
+<h2 id="summary"></h2>
+
+<script type="module">
+
+import {
+    AvailabilityState
+} from '../availability-state.js';
+
+import {
+    saveAllAvailability,
+    changeAvailability,
+    resetAvailabilityDay,
+    discardAvailability
+} from '../availability-service.js';
+
+import {
+    saveAvailabilityChanges
+} from '../availability-api.js';
+
+let passed = 0;
+let failed = 0;
+
+const testUser = '__availability_service_test__';
+const date = '2026-11-24';
+
+function createState() {
+
+    return new AvailabilityState(
+        [
+            {
+                weekday: 'Dinsdag',
+                available_minutes: 90
+            }
+        ],
+        [],
+        new Date(2026, 10, 23)
+    );
+}
+
+
+// Asynchroon testframework
+
+async function test(name, callback) {
+
+    const line = document.createElement('div');
+
+    try {
+
+        if (!(await callback())) {
+
+            throw new Error(
+                'Assertion failed'
+            );
+        }
+
+        passed++;
+
+        line.className = 'pass';
+        line.textContent = 'PASS - ' + name;
+
+    } catch (error) {
+
+        failed++;
+
+        line.className = 'fail';
+        line.textContent =
+            'FAIL - ' + name + ': ' +
+            error.message;
+
+    } finally {
+
+        sessionStorage.removeItem(
+            `availability-draft:${testUser}`
+        );
+    }
+
+    document.getElementById('results')
+        .appendChild(line);
+}
+
+
+// TEST 1
+
+await test(
+    'Successful save confirms changes',
+    async () => {
+
+        const state = createState();
+
+        changeAvailability(
+            state,
+            testUser,
+            date,
+            { available_minutes: 60 }
+        );
+
+        const result =
+            await saveAllAvailability(
+                state,
+                testUser,
+                async changes => changes.length
+            );
+
+        return (
+            result.savedCount === 1 &&
+            state.getPendingCount() === 0 &&
+            state.getDayStatus(date) === 'override' &&
+            state.getSaved(date)
+                .available_minutes === 60
+        );
+    }
+);
+
+
+// TEST 2
+
+await test(
+    'Failed save preserves pending changes',
+    async () => {
+
+        const state = createState();
+
+        changeAvailability(
+            state,
+            testUser,
+            date,
+            { available_minutes: 30 }
+        );
+
+        try {
+
+            await saveAllAvailability(
+                state,
+                testUser,
+                async () => {
+
+                    throw new Error(
+                        'Network unavailable'
+                    );
+                }
+            );
+
+            return false;
+
+        } catch {
+
+            return (
+                state.getPendingCount() === 1 &&
+                state.getDayStatus(date) === 'pending' &&
+                state.getSaved(date)
+                    .available_minutes === 90 &&
+                state.getEffective(date)
+                    .available_minutes === 30
+            );
+        }
+    }
+);
+
+
+// TEST 3
+
+await test(
+    'No changes means no API request',
+    async () => {
+
+        const state = createState();
+
+        let calls = 0;
+
+        const result =
+            await saveAllAvailability(
+                state,
+                testUser,
+                async () => {
+                    calls++;
+                    return 0;
+                }
+            );
+
+        return (
+            calls === 0 &&
+            result.savedCount === 0
+        );
+    }
+);
+
+
+// TEST 4
+
+await test(
+    'Changes are stored in session storage',
+    async () => {
+
+        const state = createState();
+
+        changeAvailability(
+            state,
+            testUser,
+            date,
+            { available_minutes: 45 }
+        );
+
+        const restored = createState();
+
+        restored.restoreDraft(testUser);
+
+        return (
+            restored.getPendingCount() === 1 &&
+            restored.getEffective(date)
+                .available_minutes === 45
+        );
+    }
+);
+
+
+// TEST 5
+
+await test(
+    'Successful save clears session draft',
+    async () => {
+
+        const state = createState();
+
+        changeAvailability(
+            state,
+            testUser,
+            date,
+            { available_minutes: 45 }
+        );
+
+        await saveAllAvailability(
+            state,
+            testUser,
+            async changes => changes.length
+        );
+
+        return sessionStorage.getItem(
+            `availability-draft:${testUser}`
+        ) === null;
+    }
+);
+
+
+// TEST 6
+
+await test(
+    'Discard clears pending changes and draft',
+    async () => {
+
+        const state = createState();
+
+        changeAvailability(
+            state,
+            testUser,
+            date,
+            { available_minutes: 45 }
+        );
+
+        discardAvailability(
+            state,
+            testUser
+        );
+
+        return (
+            state.getPendingCount() === 0 &&
+            state.getEffective(date)
+                .available_minutes === 90 &&
+            sessionStorage.getItem(
+                `availability-draft:${testUser}`
+            ) === null
+        );
+    }
+);
+
+
+// TEST 7
+
+await test(
+    'Reset to saved value clears pending',
+    async () => {
+
+        const state = createState();
+
+        changeAvailability(
+            state,
+            testUser,
+            date,
+            { available_minutes: 45 }
+        );
+
+        resetAvailabilityDay(
+            state,
+            testUser,
+            date
+        );
+
+        return state.getPendingCount() === 0;
+    }
+);
+
+
+// TEST 8
+
+await test(
+    'RPC receives the correct payload',
+    async () => {
+
+        const changes = [
+            {
+                date,
+                action: 'upsert',
+                available_minutes: 60,
+                fixed_workout: null
+            }
+        ];
+
+        let correct = false;
+
+        const mockClient = {
+
+            rpc: async (name, params) => {
+
+                correct = (
+                    name === 'save_availability_changes' &&
+                    JSON.stringify(params.p_changes) ===
+                    JSON.stringify(changes)
+                );
+
+                return {
+                    data: 1,
+                    error: null
+                };
+            }
+        };
+
+        const result =
+            await saveAvailabilityChanges(
+                changes,
+                mockClient
+            );
+
+        return correct && result === 1;
+    }
+);
+
+
+// TEST 9
+
+await test(
+    'RPC errors are propagated',
+    async () => {
+
+        const mockClient = {
+
+            rpc: async () => ({
+                data: null,
+                error: new Error('Database error')
+            })
+        };
+
+        try {
+
+            await saveAvailabilityChanges(
+                [{ date, action: 'delete' }],
+                mockClient
+            );
+
+            return false;
+
+        } catch (error) {
+
+            return error.message ===
+                'Database error';
+        }
+    }
+);
+
+
+// TEST 10
+
+await test(
+    'Unexpected saved count is rejected',
+    async () => {
+
+        const mockClient = {
+
+            rpc: async () => ({
+                data: 0,
+                error: null
+            })
+        };
+
+        try {
+
+            await saveAvailabilityChanges(
+                [{ date, action: 'delete' }],
+                mockClient
+            );
+
+            return false;
+
+        } catch {
+
+            return true;
+        }
+    }
+);
+
+
+// Toon eindresultaat
+
+document.getElementById('summary')
+    .textContent =
+        `${passed} passed, ${failed} failed`;
+
+</script>
+
+</body>
+</html>
