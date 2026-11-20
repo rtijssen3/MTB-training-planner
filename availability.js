@@ -9,9 +9,10 @@ const WEEKDAYS = [
     'Zaterdag'
 ];
 
-// Zet een lokale datum om naar YYYY-MM-DD.
+// 1. Formatteer een lokale datum
 
 export function formatDate(date) {
+
     const year = date.getFullYear();
 
     const month = String(
@@ -25,12 +26,13 @@ export function formatDate(date) {
     return `${year}-${month}-${day}`;
 }
 
-// Genereer een reeks opeenvolgende datums.
+// 2. Genereer opeenvolgende kalenderdagen
 
 export function generateDays(
     startDate = new Date(),
     numberOfDays = 14
 ) {
+
     return Array.from(
         { length: numberOfDays },
         (_, index) => {
@@ -49,52 +51,52 @@ export function generateDays(
     );
 }
 
-// Combineer normale beschikbaarheid
-// met tijdelijke uitzonderingen.
+// 3. Maak een gestandaardiseerd gegevensobject
 
-export function buildAvailability(
-    days,
-    weeklyAvailability,
-    overrides
-) {
-    return days.map(day => {
+export function normalizeAvailability(value) {
 
-        const standard =
-            weeklyAvailability.find(
-                row => row.weekday === day.weekday
-            );
+    return {
+        available_minutes:
+            value?.available_minutes ?? 0,
 
-        const override =
-            overrides.find(
-                row => row.date === day.date
-            );
-
-        const effective = override ?? standard;
-
-        return {
-            date: day.date,
-            weekday: day.weekday,
-
-            standardMinutes:
-                standard?.available_minutes ?? 0,
-
-            availableMinutes:
-                effective?.available_minutes ?? 0,
-
-            fixedWorkout:
-                effective?.fixed_workout ?? null,
-
-            isOverride: override !== undefined
-        };
-    });
+        fixed_workout:
+            value?.fixed_workout?.trim() || null
+    };
 }
 
-// Bereken de totale beschikbaarheid.
+// 4. Vergelijk twee beschikbaarheidsobjecten
+
+export function sameAvailability(a, b) {
+
+    const first = normalizeAvailability(a);
+    const second = normalizeAvailability(b);
+
+    return (
+        first.available_minutes ===
+            second.available_minutes &&
+
+        first.fixed_workout ===
+            second.fixed_workout
+    );
+}
+
+// 5. Bereken totale beschikbare minuten
 
 export function totalMinutes(days) {
+
     return days.reduce(
         (total, day) =>
-            total + day.availableMinutes,
+            total + day.available_minutes,
         0
     );
+}
+
+// 6. Formatteer minuten als uren en minuten
+
+export function formatDuration(minutes) {
+
+    const hours = Math.floor(minutes / 60);
+    const remaining = minutes % 60;
+
+    return `${hours}u ${remaining}m`;
 }

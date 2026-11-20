@@ -1,0 +1,497 @@
+
+<!DOCTYPE html>
+<html lang="nl">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Availability unit tests</title>
+
+    <style>
+        body {
+            font-family: monospace;
+            padding: 30px;
+            line-height: 1.7;
+        }
+
+        .pass { color: green; }
+        .fail { color: red; }
+    </style>
+</head>
+
+<body>
+
+<h1>MTB Planner - Availability tests</h1>
+
+<div id="results"></div>
+<h2 id="summary"></h2>
+
+<script type="module">
+
+import {
+    generateDays,
+    sameAvailability,
+    formatDuration
+} from '../availability.js';
+
+import {
+    AvailabilityState
+} from '../availability-state.js';
+
+let passed = 0;
+let failed = 0;
+
+// Eenvoudig testframework
+
+function test(name, callback) {
+
+    const line = document.createElement('div');
+
+    try {
+
+        if (!callback()) {
+            throw new Error('Assertion failed');
+        }
+
+        passed++;
+        line.className = 'pass';
+        line.textContent = 'PASS - ' + name;
+
+    } catch (error) {
+
+        failed++;
+        line.className = 'fail';
+        line.textContent =
+            'FAIL - ' + name + ': ' + error.message;
+    }
+
+    document.getElementById('results')
+        .appendChild(line);
+}
+
+// Testgegevens
+
+const weekly = [
+    {
+        weekday: 'Maandag',
+        available_minutes: 0
+    },
+    {
+        weekday: 'Dinsdag',
+        available_minutes: 90
+    },
+    {
+        weekday: 'Woensdag',
+        available_minutes: 120
+    },
+    {
+        weekday: 'Donderdag',
+        available_minutes: 90
+    },
+    {
+        weekday: 'Vrijdag',
+        available_minutes: 0
+    },
+    {
+        weekday: 'Zaterdag',
+        available_minutes: 60
+    },
+    {
+        weekday: 'Zondag',
+        available_minutes: 180,
+        fixed_workout: 'Groepsrit'
+    }
+];
+
+const overrides = [
+    {
+        date: '2026-11-25',
+        available_minutes: 90,
+        fixed_workout: null
+    }
+];
+
+function createState() {
+
+    return new AvailabilityState(
+        weekly,
+        overrides,
+        new Date(2026, 10, 23)
+    );
+}
+
+const wednesday = '2026-11-25';
+const tuesday = '2026-11-24';
+const sunday = '2026-11-29';
+
+// Tests: basisfuncties
+
+test('Generate 14 days', () =>
+    generateDays().length === 14
+);
+
+test('Month transition', () =>
+    generateDays(
+        new Date(2026, 10, 30), 2
+    )[1].date === '2026-12-01'
+);
+
+test('Year transition', () =>
+    generateDays(
+        new Date(2026, 11, 31), 2
+    )[1].date === '2027-01-01'
+);
+
+test('Leap year', () =>
+    generateDays(
+        new Date(2028, 1, 28), 2
+    )[1].date === '2028-02-29'
+);
+
+test('Format duration', () =>
+    formatDuration(135) === '2u 15m'
+);
+
+test('Normalize empty workout', () =>
+    sameAvailability(
+        {
+            available_minutes: 90,
+            fixed_workout: ''
+        },
+        {
+            available_minutes: 90,
+            fixed_workout: null
+        }
+    )
+);
+
+// Tests: opgeslagen beschikbaarheid
+
+test('Standard availability', () =>
+    createState().getStandard(wednesday)
+        .available_minutes === 120
+);
+
+test('Saved override', () =>
+    createState().getSaved(wednesday)
+        .available_minutes === 90
+);
+
+test('Correct override status', () =>
+    createState().getDayStatus(wednesday)
+        === 'override'
+);
+
+test('Correct standard status', () =>
+    createState().getDayStatus(tuesday)
+        === 'standard'
+);
+
+// Tests: tijdelijke wijzigingen
+
+test('Pending change has priority', () => {
+
+    const state = createState();
+
+    state.updateDay(wednesday, {
+        available_minutes: 45
+    });
+
+    return state.getEffective(wednesday)
+        .available_minutes === 45;
+});
+
+test('Zero-minute override works', () => {
+
+    const state = createState();
+
+    state.updateDay(wednesday, {
+        available_minutes: 0
+    });
+
+    return state.getEffective(wednesday)
+        .available_minutes === 0;
+});
+
+test('Saved value remains unchanged', () => {
+
+    const state = createState();
+
+    state.updateDay(wednesday, {
+        available_minutes: 45
+    });
+
+    return state.getSaved(wednesday)
+        .available_minutes === 90;
+});
+
+test('Pending status', () => {
+
+    const state = createState();
+
+    state.updateDay(wednesday, {
+        available_minutes: 45
+    });
+
+    return state.getDayStatus(wednesday)
+        === 'pending';
+});
+
+test('Repeated changes count as one', () => {
+
+    const state = createState();
+
+    state.updateDay(tuesday, {
+        available_minutes: 60
+    });
+
+    state.updateDay(tuesday, {
+        available_minutes: 30
+    });
+
+    return state.getPendingCount() === 1;
+});
+
+test('Return to saved value clears pending', () => {
+
+    const state = createState();
+
+    state.updateDay(wednesday, {
+        available_minutes: 45
+    });
+
+    state.updateDay(wednesday, {
+        available_minutes: 90
+    });
+
+    return state.getPendingCount() === 0;
+});
+
+test('Multiple pending days', () => {
+
+    const state = createState();
+
+    state.updateDay(tuesday, {
+        available_minutes: 60
+    });
+
+    state.updateDay(wednesday, {
+        available_minutes: 0
+    });
+
+    return state.getPendingCount() === 2;
+});
+
+test('Workout change preserves minutes', () => {
+
+    const state = createState();
+
+    state.updateDay(sunday, {
+        fixed_workout: 'MTB-wedstrijd'
+    });
+
+    const day = state.getEffective(sunday);
+
+    return (
+        day.available_minutes === 180 &&
+        day.fixed_workout === 'MTB-wedstrijd'
+    );
+});
+
+// Tests: opslaan en annuleren
+
+test('UPSERT payload', () => {
+
+    const state = createState();
+
+    state.updateDay(tuesday, {
+        available_minutes: 60
+    });
+
+    const payload = state.getSavePayload();
+
+    return (
+        payload.length === 1 &&
+        payload[0].action === 'upsert' &&
+        payload[0].available_minutes === 60
+    );
+});
+
+test('DELETE payload after reset', () => {
+
+    const state = createState();
+
+    state.resetDay(wednesday);
+
+    return state.getSavePayload()[0].action
+        === 'delete';
+});
+
+test('Confirmed change becomes saved', () => {
+
+    const state = createState();
+
+    state.updateDay(tuesday, {
+        available_minutes: 60
+    });
+
+    state.confirmSaved();
+
+    return (
+        state.getPendingCount() === 0 &&
+        state.getDayStatus(tuesday) === 'override' &&
+        state.getSaved(tuesday)
+            .available_minutes === 60
+    );
+});
+
+test('Confirmed reset becomes standard', () => {
+
+    const state = createState();
+
+    state.resetDay(wednesday);
+    state.confirmSaved();
+
+    return (
+        state.getDayStatus(wednesday)
+            === 'standard' &&
+        state.getPendingCount() === 0 &&
+        state.getEffective(wednesday)
+            .available_minutes === 120
+    );
+});
+
+test('Discard changes restores saved', () => {
+
+    const state = createState();
+
+    state.updateDay(wednesday, {
+        available_minutes: 0
+    });
+
+    state.discardChanges();
+
+    return (
+        state.getPendingCount() === 0 &&
+        state.getEffective(wednesday)
+            .available_minutes === 90
+    );
+});
+
+// Tests: totalen en validatie
+
+test('Correct weekly totals', () => {
+
+    const totals = createState().getTotals();
+
+    return (
+        totals.week1 === 510 &&
+        totals.week2 === 540
+    );
+});
+
+test('Weekly totals update immediately', () => {
+
+    const state = createState();
+
+    state.updateDay(wednesday, {
+        available_minutes: 0
+    });
+
+    return state.getTotals().week1 === 420;
+});
+
+test('Invalid minutes rejected', () => {
+
+    const state = createState();
+
+    try {
+
+        state.updateDay(tuesday, {
+            available_minutes: 1500
+        });
+
+        return false;
+
+    } catch {
+
+        return state.getPendingCount() === 0;
+    }
+});
+
+// Tests: SessionStorage
+
+const testUser = '__availability_test__';
+
+test('Restore session draft', () => {
+
+    const state = createState();
+
+    try {
+
+        state.updateDay(tuesday, {
+            available_minutes: 30
+        });
+
+        state.storeDraft(testUser);
+
+        const restored = createState();
+
+        restored.restoreDraft(testUser);
+
+        return (
+            restored.getPendingCount() === 1 &&
+            restored.getEffective(tuesday)
+                .available_minutes === 30
+        );
+
+    } finally {
+
+        state.clearDraft(testUser);
+    }
+});
+
+test('Ignore stale session draft', () => {
+
+    const state = createState();
+
+    try {
+
+        state.updateDay(wednesday, {
+            available_minutes: 45
+        });
+
+        state.storeDraft(testUser);
+
+        const newer = new AvailabilityState(
+            weekly,
+            [{
+                date: wednesday,
+                available_minutes: 150
+            }],
+            new Date(2026, 10, 23)
+        );
+
+        newer.restoreDraft(testUser);
+
+        return (
+            newer.getPendingCount() === 0 &&
+            newer.getEffective(wednesday)
+                .available_minutes === 150
+        );
+
+    } finally {
+
+        state.clearDraft(testUser);
+    }
+});
+
+// Toon testresultaten
+
+document.getElementById('summary')
+    .textContent =
+        `${passed} passed, ${failed} failed`;
+
+</script>
+
+</body>
+</html>
