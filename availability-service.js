@@ -1,5 +1,9 @@
 
 import {
+    getMonday
+} from './availability.js';
+
+import {
     AvailabilityState
 } from './availability-state.js';
 
@@ -9,12 +13,16 @@ import {
 } from './availability-api.js';
 
 
+
 // 1. Kalender initialiseren
+
 
 export async function initializeAvailability(
     userId,
-    startDate = new Date()
+    today = new Date()
 ) {
+
+    const startDate = getMonday(today);
 
     const {
         weeklyAvailability,
@@ -27,7 +35,8 @@ export async function initializeAvailability(
     const state = new AvailabilityState(
         weeklyAvailability,
         savedOverrides,
-        startDate
+        startDate,
+        today
     );
 
     let restoredChanges = 0;
@@ -52,6 +61,7 @@ export async function initializeAvailability(
         storageWarning
     };
 }
+
 
 
 // 2. Tijdelijke wijziging verwerken

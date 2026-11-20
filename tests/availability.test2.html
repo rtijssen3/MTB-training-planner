@@ -30,7 +30,10 @@
 import {
     generateDays,
     sameAvailability,
-    formatDuration
+    formatDuration,
+    getMonday,
+    getISOWeek,
+    formatDate
 } from '../availability.js';
 
 import {
@@ -484,6 +487,167 @@ test('Ignore stale session draft', () => {
         state.clearDraft(testUser);
     }
 });
+
+
+// Tests: kalenderweken
+
+test('Wednesday starts on Monday', () => {
+
+    const today = new Date(2026, 10, 25);
+
+    return formatDate(getMonday(today))
+        === '2026-11-23';
+});
+
+
+test('Monday starts on same day', () => {
+
+    const today = new Date(2026, 10, 23);
+
+    return formatDate(getMonday(today))
+        === '2026-11-23';
+});
+
+
+test('Sunday starts on previous Monday', () => {
+
+    const today = new Date(2026, 10, 29);
+
+    return formatDate(getMonday(today))
+        === '2026-11-23';
+});
+
+
+test('Monday across year boundary', () => {
+
+    const today = new Date(2027, 0, 1);
+
+    return formatDate(getMonday(today))
+        === '2026-12-28';
+});
+
+
+test('Correct ISO week number', () => {
+
+    return getISOWeek(
+        new Date(2026, 10, 23)
+    ) === 48;
+});
+
+
+// Tests: verstreken dagen blokkeren
+
+function createWednesdayState() {
+
+    return new AvailabilityState(
+        weekly,
+        overrides,
+        new Date(2026, 10, 23),
+        new Date(2026, 10, 25)
+    );
+}
+
+
+test('Past day is not editable', () => {
+
+    const state = createWednesdayState();
+
+    return !state.isEditable('2026-11-24');
+});
+
+
+test('Today is editable', () => {
+
+    const state = createWednesdayState();
+
+    return state.isEditable('2026-11-25');
+});
+
+
+test('Future day is editable', () => {
+
+    const state = createWednesdayState();
+
+    return state.isEditable('2026-11-26');
+});
+
+
+test('Updating a past day throws error', () => {
+
+    const state = createWednesdayState();
+
+    try {
+
+        state.updateDay('2026-11-24', {
+            available_minutes: 60
+        });
+
+        return false;
+
+    } catch {
+
+        return state.getPendingCount() === 0;
+    }
+});
+
+
+test('Resetting a past day throws error', () => {
+
+    const state = createWednesdayState();
+
+    try {
+
+        state.resetDay('2026-11-24');
+
+        return false;
+
+    } catch {
+
+        return state.getPendingCount() === 0;
+    }
+});
+
+
+test('Calendar contains two Monday-Sunday weeks', () => {
+
+    const state = createWednesdayState();
+
+    const days = state.getCalendar();
+
+    return (
+        days.length === 14 &&
+        days[0].weekday === 'Maandag' &&
+        days[6].weekday === 'Zondag' &&
+        days[7].weekday === 'Maandag' &&
+        days[13].weekday === 'Zondag'
+    );
+});
+
+
+test('Expired draft is not restored', () => {
+
+    const state = createState();
+
+    try {
+
+        state.updateDay('2026-11-24', {
+            available_minutes: 60
+        });
+
+        state.storeDraft(testUser);
+
+        const newer = createWednesdayState();
+
+        newer.restoreDraft(testUser);
+
+        return newer.getPendingCount() === 0;
+
+    } finally {
+
+        state.clearDraft(testUser);
+    }
+});
+
 
 // Toon testresultaten
 

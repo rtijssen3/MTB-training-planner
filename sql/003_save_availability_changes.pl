@@ -58,6 +58,13 @@ BEGIN
             RAISE EXCEPTION 'Date is required';
         END IF;
 
+        IF v_date <
+            (now() AT TIME ZONE 'Europe/Amsterdam')::date
+        THEN
+            RAISE EXCEPTION
+                'Past dates cannot be modified';
+        END IF;
+
         -- 4. Afwijking toevoegen of aanpassen
 
         IF v_action = 'upsert' THEN

@@ -3,18 +3,25 @@ import {
     generateDays,
     normalizeAvailability,
     sameAvailability,
-    totalMinutes
+    totalMinutes,
+    formatDate
 } from './availability.js';
+
 
 export class AvailabilityState {
 
-    // 1. Initialisatie
+    // ====================================
+    // 1. INITIALISATIE
+    // ====================================
 
     constructor(
         weeklyAvailability,
         savedOverrides = [],
-        startDate = new Date()
+        startDate = new Date(),
+        today = startDate
     ) {
+
+        this.today = formatDate(today);
 
         this.days = generateDays(startDate, 14);
 
@@ -35,7 +42,10 @@ export class AvailabilityState {
         this.pendingChanges = new Map();
     }
 
-    // 2. Normale beschikbaarheid ophalen
+
+    // ====================================
+    // 2. NORMALE BESCHIKBAARHEID OPHALEN
+    // ====================================
 
     getStandard(date) {
 
@@ -52,7 +62,10 @@ export class AvailabilityState {
         );
     }
 
-    // 3. Opgeslagen beschikbaarheid ophalen
+
+    // ====================================
+    // 3. OPGESLAGEN BESCHIKBAARHEID OPHALEN
+    // ====================================
 
     getSaved(date) {
 
@@ -62,7 +75,10 @@ export class AvailabilityState {
         );
     }
 
-    // 4. Effectieve beschikbaarheid ophalen
+
+    // ====================================
+    // 4. EFFECTIEVE BESCHIKBAARHEID OPHALEN
+    // ====================================
 
     getEffective(date) {
 
@@ -72,9 +88,37 @@ export class AvailabilityState {
         );
     }
 
-    // 5. Tijdelijke wijziging verwerken
+
+    // ====================================
+    // 5. CONTROLEREN OF DAG BEWERKBAAR IS
+    // ====================================
+
+    isEditable(date) {
+
+        const exists = this.days.some(
+            day => day.date === date
+        );
+
+        return exists && date >= this.today;
+    }
+
+
+    // ====================================
+    // 6. TIJDELIJKE WIJZIGING VERWERKEN
+    // ====================================
 
     updateDay(date, changes) {
+
+        // Verstreken dagen blokkeren
+
+        if (!this.isEditable(date)) {
+
+            throw new Error(
+                'Deze dag kan niet meer worden aangepast'
+            );
+        }
+
+        // Nieuwe beschikbaarheid samenstellen
 
         const updated = normalizeAvailability({
             ...this.getEffective(date),
@@ -83,15 +127,20 @@ export class AvailabilityState {
 
         const minutes = updated.available_minutes;
 
+        // Invoer valideren
+
         if (
             !Number.isInteger(minutes) ||
             minutes < 0 ||
             minutes > 1440
         ) {
+
             throw new Error(
                 'Invalid available minutes'
             );
         }
+
+        // Vergelijken met opgeslagen waarde
 
         if (
             sameAvailability(
@@ -100,9 +149,13 @@ export class AvailabilityState {
             )
         ) {
 
+            // Geen verschil meer met database
+
             this.pendingChanges.delete(date);
 
         } else {
+
+            // Tijdelijke wijziging bewaren
 
             this.pendingChanges.set(
                 date,
@@ -111,7 +164,10 @@ export class AvailabilityState {
         }
     }
 
-    // 6. Standaardbeschikbaarheid herstellen
+
+    // ====================================
+    // 7. STANDAARDBESCHIKBAARHEID HERSTELLEN
+    // ====================================
 
     resetDay(date) {
 
@@ -121,7 +177,10 @@ export class AvailabilityState {
         );
     }
 
-    // 7. Status van een dag bepalen
+
+    // ====================================
+    // 8. STATUS VAN EEN DAG BEPALEN
+    // ====================================
 
     getDayStatus(date) {
 
@@ -136,13 +195,17 @@ export class AvailabilityState {
         return 'standard';
     }
 
-    // 8. Alle kalenderdagen ophalen
+
+    // ====================================
+    // 9. ALLE KALENDERDAGEN OPHALEN
+    // ====================================
 
     getCalendar() {
 
         return this.days.map(day => ({
 
             date: day.date,
+
             weekday: day.weekday,
 
             ...this.getEffective(day.date),
@@ -152,17 +215,31 @@ export class AvailabilityState {
                     .available_minutes,
 
             status:
-                this.getDayStatus(day.date)
+                this.getDayStatus(day.date),
+
+            isEditable:
+                this.isEditable(day.date),
+
+            isToday:
+                day.date === this.today,
+
+            isPast:
+                day.date < this.today
+
         }));
     }
 
-    // 9. Totalen per periode van 7 dagen
+
+    // ====================================
+    // 10. TOTALEN PER KALENDERWEEK
+    // ====================================
 
     getTotals() {
 
         const calendar = this.getCalendar();
 
         return {
+
             week1: totalMinutes(
                 calendar.slice(0, 7)
             ),
@@ -173,20 +250,30 @@ export class AvailabilityState {
         };
     }
 
-    // 10. Aantal openstaande wijzigingen
+
+    // ====================================
+    // 11. AANTAL OPENSTAANDE WIJZIGINGEN
+    // ====================================
 
     getPendingCount() {
 
         return this.pendingChanges.size;
     }
 
-    // 11. API-verzoek voorbereiden
+
+    // ====================================
+    // 12. API-VERZOEK VOORBEREIDEN
+    // ====================================
 
     getSavePayload() {
 
         return Array.from(
             this.pendingChanges,
             ([date, value]) => {
+
+                // Als de standaardbeschikbaarheid
+                // wordt hersteld, verwijderen we
+                // de bestaande override.
 
                 if (
                     sameAvailability(
@@ -201,6 +288,9 @@ export class AvailabilityState {
                     };
                 }
 
+                // Anders voegen we een override
+                // toe of werken we deze bij.
+
                 return {
                     date,
                     action: 'upsert',
@@ -210,8 +300,13 @@ export class AvailabilityState {
         );
     }
 
-    // 12. Wijzigingen lokaal bevestigen
-    // Alleen aanroepen na succesvolle RPC
+
+    // ====================================
+    // 13. WIJZIGINGEN LOKAAL BEVESTIGEN
+    // ====================================
+
+    // Deze methode alleen aanroepen na
+    // succesvolle opslag in Supabase.
 
     confirmSaved() {
 
@@ -241,32 +336,49 @@ export class AvailabilityState {
         this.pendingChanges.clear();
     }
 
-    // 13. Tijdelijke wijzigingen annuleren
+
+    // ====================================
+    // 14. TIJDELIJKE WIJZIGINGEN ANNULEREN
+    // ====================================
 
     discardChanges() {
 
         this.pendingChanges.clear();
     }
 
-    // 14. Tijdelijke wijzigingen bewaren
+
+    // ====================================
+    // 15. TIJDELIJKE WIJZIGINGEN BEWAREN
+    // ====================================
 
     storeDraft(userId) {
 
         const key =
             `availability-draft:${userId}`;
 
+        // Geen wijzigingen meer?
+        // Verwijder dan de conceptopslag.
+
         if (this.pendingChanges.size === 0) {
 
             sessionStorage.removeItem(key);
+
             return;
         }
+
+        // Bewaar zowel de nieuwe waarde als
+        // de oorspronkelijke databasewaarde.
 
         const draft = Array.from(
             this.pendingChanges,
             ([date, value]) => ({
+
                 date,
+
                 value,
+
                 baseline: this.getSaved(date)
+
             })
         );
 
@@ -276,7 +388,10 @@ export class AvailabilityState {
         );
     }
 
-    // 15. Tijdelijke wijzigingen herstellen
+
+    // ====================================
+    // 16. TIJDELIJKE WIJZIGINGEN HERSTELLEN
+    // ====================================
 
     restoreDraft(userId) {
 
@@ -291,6 +406,8 @@ export class AvailabilityState {
         let draft;
         let restored = 0;
 
+        // JSON uitlezen
+
         try {
 
             draft = JSON.parse(stored);
@@ -298,13 +415,18 @@ export class AvailabilityState {
         } catch {
 
             sessionStorage.removeItem(key);
+
             return 0;
         }
 
         if (!Array.isArray(draft)) {
+
             sessionStorage.removeItem(key);
+
             return 0;
         }
+
+        // Alle conceptwijzigingen controleren
 
         for (const entry of draft) {
 
@@ -312,35 +434,62 @@ export class AvailabilityState {
                 !entry ||
                 typeof entry !== 'object'
             ) {
+
                 continue;
             }
 
-            const { date, value, baseline } = entry;
+            const {
+                date,
+                value,
+                baseline
+            } = entry;
+
+
+            // Controleer of de datum nog
+            // binnen de huidige kalender valt.
 
             const exists = this.days.some(
                 day => day.date === date
             );
 
-            if (!exists) continue;
+
+            // Negeer datums buiten de kalender
+            // en dagen die inmiddels verstreken zijn.
+
+            if (!exists || !this.isEditable(date)) {
+
+                continue;
+            }
+
+
+            // Controleer of de opgeslagen
+            // conceptgegevens geldig zijn.
 
             if (
                 !value ||
                 !baseline ||
+
                 !Number.isInteger(
                     value.available_minutes
                 ) ||
+
                 value.available_minutes < 0 ||
+
                 value.available_minutes > 1440 ||
+
                 (
                     value.fixed_workout !== null &&
                     typeof value.fixed_workout
                         !== 'string'
                 )
             ) {
+
                 continue;
             }
 
-            // Herstel alleen als de opgeslagen
+
+            // Conflictcontrole:
+            // herstel alleen wanneer de opgeslagen
             // uitgangssituatie niet is gewijzigd.
 
             if (
@@ -349,19 +498,32 @@ export class AvailabilityState {
                     this.getSaved(date)
                 )
             ) {
+
                 continue;
             }
 
+
+            // Geldige conceptwijziging herstellen.
+
             this.updateDay(date, value);
+
             restored++;
         }
+
+
+        // SessionStorage bijwerken.
+        // Verlopen en ongeldige wijzigingen
+        // worden hiermee verwijderd.
 
         this.storeDraft(userId);
 
         return restored;
     }
 
-    // 16. Tijdelijke opslag verwijderen
+
+    // ====================================
+    // 17. TIJDELIJKE OPSLAG VERWIJDEREN
+    // ====================================
 
     clearDraft(userId) {
 
@@ -370,5 +532,4 @@ export class AvailabilityState {
 
         sessionStorage.removeItem(key);
     }
-
 }

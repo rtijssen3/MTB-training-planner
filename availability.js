@@ -100,3 +100,44 @@ export function formatDuration(minutes) {
 
     return `${hours}u ${remaining}m`;
 }
+// 7. vind de maandag (ipv zondag) voor start weekweergave
+export function getMonday(date = new Date()) {
+
+    const monday = new Date(date);
+
+    const weekday = monday.getDay();
+
+    const offset = (weekday + 6) % 7;
+
+    monday.setDate(
+        monday.getDate() - offset
+    );
+
+    monday.setHours(0, 0, 0, 0);
+
+    return monday;
+}
+
+// 8. vind ISO-weeknummer
+export function getISOWeek(date) {
+
+    const d = new Date(Date.UTC(
+        date.getFullYear(),
+        date.getMonth(),
+        date.getDate()
+    ));
+
+    const weekday = d.getUTCDay() || 7;
+
+    d.setUTCDate(
+        d.getUTCDate() + 4 - weekday
+    );
+
+    const yearStart = new Date(
+        Date.UTC(d.getUTCFullYear(), 0, 1)
+    );
+
+    return Math.ceil(
+        ((d - yearStart) / 86400000 + 1) / 7
+    );
+}
