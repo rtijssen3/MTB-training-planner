@@ -6,7 +6,9 @@ import {
 } from './availability.js';
 
 
-// 1. Normale week ophalen
+// ====================================
+// 1. NORMALE WEEK OPHALEN
+// ====================================
 
 export async function fetchWeeklyAvailability(userId) {
 
@@ -25,7 +27,9 @@ export async function fetchWeeklyAvailability(userId) {
 }
 
 
-// 2. Afwijkingen ophalen
+// ====================================
+// 2. AFWIJKINGEN OPHALEN
+// ====================================
 
 export async function fetchOverrides(
     userId,
@@ -51,21 +55,80 @@ export async function fetchOverrides(
 }
 
 
-// 3. Alle kalendergegevens ophalen
+// ====================================
+// 3. HISTORISCHE BESCHIKBAARHEID
+//    OPHALEN
+// ====================================
+
+export async function fetchHistory(
+    userId,
+    startDate,
+    endDate
+) {
+
+    const { data, error } = await supabase
+        .from('availability_history')
+        .select(
+            'date, available_minutes, fixed_workout'
+        )
+        .eq('user_id', userId)
+        .gte('date', startDate)
+        .lte('date', endDate)
+        .order('date', { ascending: true });
+
+    if (error) {
+        throw error;
+    }
+
+    return data ?? [];
+}
+
+
+// ====================================
+// 4. VERSTREKEN DAGEN BEVRIEZEN
+// ====================================
+
+export async function freezePastAvailability() {
+
+    const { error } = await supabase.rpc(
+        'freeze_past_availability'
+    );
+
+    if (error) {
+        throw error;
+    }
+}
+
+
+// ====================================
+// 5. ALLE KALENDERGEGEVENS OPHALEN
+// ====================================
 
 export async function loadAvailabilityData(
     userId,
     startDate = new Date()
 ) {
 
+    // Eerst verstreken dagen definitief
+    // vastleggen in de historische tabel.
+
+    await freezePastAvailability();
+
+
+    // Kalenderperiode bepalen
+
     const days = generateDays(startDate, 14);
 
     const firstDate = days[0].date;
     const lastDate = days[13].date;
 
+
+    // Alle drie de datasets parallel ophalen
+
     const [
         weeklyAvailability,
-        savedOverrides
+        savedOverrides,
+        history
     ] = await Promise.all([
 
         fetchWeeklyAvailability(userId),
@@ -74,17 +137,55 @@ export async function loadAvailabilityData(
             userId,
             firstDate,
             lastDate
+        ),
+
+        fetchHistory(
+            userId,
+            firstDate,
+            lastDate
         )
     ]);
 
+
+    // Opgeslagen overrides combineren
+    // met historische beschikbaarheid.
+
+    const combinedOverrides = new Map(
+        savedOverrides.map(row => [
+            row.date,
+            row
+        ])
+    );
+
+
+    // Historische gegevens hebben voorrang.
+
+    for (const row of history) {
+
+        combinedOverrides.set(
+            row.date,
+            row
+        );
+    }
+
+
+    // Behoud de bestaande interface met
+    // availability-service.js.
+
     return {
         weeklyAvailability,
-        savedOverrides
+
+        savedOverrides:
+            Array.from(
+                combinedOverrides.values()
+            )
     };
 }
 
 
-// 4. Alle wijzigingen tegelijk opslaan
+// ====================================
+// 6. ALLE WIJZIGINGEN OPSLAAN
+// ====================================
 
 export async function saveAvailabilityChanges(
     changes,
@@ -111,7 +212,9 @@ export async function saveAvailabilityChanges(
 
     const { data, error } = await client
         .rpc('save_availability_changes', {
+
             p_changes: changes
+
         });
 
     if (error) {
