@@ -1,0 +1,271 @@
+
+<!DOCTYPE html>
+<html lang="nl">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Availability integration test</title>
+
+    <style>
+        body {
+            font-family: monospace;
+            padding: 30px;
+            line-height: 1.7;
+        }
+
+        pre {
+            white-space: pre-wrap;
+            background: #f2f2f2;
+            padding: 15px;
+        }
+
+        button {
+            padding: 12px;
+            margin-bottom: 15px;
+        }
+    </style>
+</head>
+
+<body>
+
+<h1>Supabase integration test</h1>
+
+<button id="run-test">
+    Run integration test
+</button>
+
+<pre id="results"></pre>
+
+<script type="module">
+
+import {
+    supabase
+} from '../supabase-client.js';
+
+import {
+    loadAvailabilityData,
+    fetchOverrides,
+    saveAvailabilityChanges
+} from '../availability-api.js';
+
+const button =
+    document.getElementById('run-test');
+
+const output =
+    document.getElementById('results');
+
+function log(message) {
+
+    output.textContent += message + '\n';
+}
+
+button.addEventListener('click', async () => {
+
+    button.disabled = true;
+    output.textContent = '';
+
+    let temporaryDates = [];
+
+    try {
+
+        // TEST 1: Authenticatie
+
+        const { data, error } =
+            await supabase.auth.getUser();
+
+        if (error) throw error;
+
+        if (!data.user) {
+
+            throw new Error(
+                'Log eerst in op de lokale website'
+            );
+        }
+
+        const userId = data.user.id;
+
+        log('PASS - Authentication');
+
+
+        // TEST 2: Kalendergegevens ophalen
+
+        const availability =
+            await loadAvailabilityData(userId);
+
+        if (availability.weeklyAvailability.length !== 7) {
+            throw new Error(
+                'Expected seven weekdays'
+            );
+        }
+
+        log('PASS - Weekly availability loaded');
+        log('PASS - Overrides loaded');
+
+        log(JSON.stringify(
+            availability,
+            null,
+            2
+        ));
+
+
+        // Controleer of testdatums vrij zijn
+
+        const first = '2099-01-01';
+        const second = '2099-01-02';
+
+        const existing = await fetchOverrides(
+            userId,
+            first,
+            second
+        );
+
+        if (existing.length > 0) {
+
+            throw new Error(
+                'Test dates already in use'
+            );
+        }
+
+        temporaryDates = [first, second];
+
+
+        // TEST 3: Twee records opslaan
+
+        const savedCount =
+            await saveAvailabilityChanges([
+                {
+                    date: first,
+                    action: 'upsert',
+                    available_minutes: 60,
+                    fixed_workout: null
+                },
+                {
+                    date: second,
+                    action: 'upsert',
+                    available_minutes: 0,
+                    fixed_workout: null
+                }
+            ]);
+
+        if (savedCount !== 2) {
+
+            throw new Error(
+                'Unexpected save count'
+            );
+        }
+
+        log('PASS - RPC batch save');
+
+
+        // TEST 4: Records teruglezen
+
+        const records = await fetchOverrides(
+            userId,
+            first,
+            second
+        );
+
+        if (
+            records.length !== 2 ||
+            records[0].available_minutes !== 60 ||
+            records[1].available_minutes !== 0
+        ) {
+
+            throw new Error(
+                'Incorrect database values'
+            );
+        }
+
+        log('PASS - Saved records verified');
+
+
+        // TEST 5: Atomicity
+
+        let rejected = false;
+
+        try {
+
+            await saveAvailabilityChanges([
+                {
+                    date: first,
+                    action: 'upsert',
+                    available_minutes: 120
+                },
+                {
+                    date: second,
+                    action: 'upsert',
+                    available_minutes: 1500
+                }
+            ]);
+
+        } catch {
+
+            rejected = true;
+        }
+
+        if (!rejected) {
+
+            throw new Error(
+                'Invalid request was accepted'
+            );
+        }
+
+        const afterError = await fetchOverrides(
+            userId,
+            first,
+            second
+        );
+
+        if (
+            afterError.length !== 2 ||
+            afterError[0].available_minutes !== 60 ||
+            afterError[1].available_minutes !== 0
+        ) {
+
+            throw new Error(
+                'Transaction was not rolled back'
+            );
+        }
+
+        log('PASS - Atomic rollback verified');
+
+        log('\nAll integration checks passed.');
+
+    } catch (error) {
+
+        log('\nFAIL - ' + error.message);
+
+    } finally {
+
+        // Testrecords verwijderen
+
+        if (temporaryDates.length > 0) {
+
+            try {
+
+                await saveAvailabilityChanges(
+                    temporaryDates.map(date => ({
+                        date,
+                        action: 'delete'
+                    }))
+                );
+
+                log('PASS - Test records removed');
+
+            } catch (error) {
+
+                log(
+                    'WARNING - Cleanup failed: ' +
+                    error.message
+                );
+            }
+        }
+
+        button.disabled = false;
+    }
+});
+
+</script>
+
+</body>
+</html>
