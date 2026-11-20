@@ -104,82 +104,92 @@ export async function freezePastAvailability() {
 // 5. ALLE KALENDERGEGEVENS OPHALEN
 // ====================================
 
+
 export async function loadAvailabilityData(
     userId,
     startDate = new Date()
 ) {
 
-    // Eerst verstreken dagen definitief
-    // vastleggen in de historische tabel.
-
     await freezePastAvailability();
-
-
-    // Kalenderperiode bepalen
 
     const days = generateDays(startDate, 14);
 
     const firstDate = days[0].date;
     const lastDate = days[13].date;
 
+    // Maximaal drie pogingen om een
+    // consistente dataset op te halen.
 
-    // Alle drie de datasets parallel ophalen
+    for (let attempt = 0; attempt < 3; attempt++) {
 
-    const [
-        weeklyAvailability,
-        savedOverrides,
-        history
-    ] = await Promise.all([
+        const revisionBefore =
+            await fetchRevision();
 
-        fetchWeeklyAvailability(userId),
+        const [
+            weeklyAvailability,
+            savedOverrides,
+            history
+        ] = await Promise.all([
 
-        fetchOverrides(
-            userId,
-            firstDate,
-            lastDate
-        ),
+            fetchWeeklyAvailability(userId),
 
-        fetchHistory(
-            userId,
-            firstDate,
-            lastDate
-        )
-    ]);
+            fetchOverrides(
+                userId,
+                firstDate,
+                lastDate
+            ),
 
+            fetchHistory(
+                userId,
+                firstDate,
+                lastDate
+            )
+        ]);
 
-    // Opgeslagen overrides combineren
-    // met historische beschikbaarheid.
+        const revisionAfter =
+            await fetchRevision();
 
-    const combinedOverrides = new Map(
-        savedOverrides.map(row => [
-            row.date,
-            row
-        ])
-    );
+        // Is er tussentijds iets gewijzigd?
+        // Dan proberen we opnieuw.
 
+        if (revisionBefore !== revisionAfter) {
 
-    // Historische gegevens hebben voorrang.
+            continue;
+        }
 
-    for (const row of history) {
-
-        combinedOverrides.set(
-            row.date,
-            row
+        const combinedOverrides = new Map(
+            savedOverrides.map(row => [
+                row.date,
+                row
+            ])
         );
+
+        for (const row of history) {
+
+            combinedOverrides.set(
+                row.date,
+                row
+            );
+        }
+
+        return {
+
+            weeklyAvailability,
+
+            savedOverrides:
+                Array.from(
+                    combinedOverrides.values()
+                ),
+
+            revision: revisionAfter
+        };
     }
 
-
-    // Behoud de bestaande interface met
-    // availability-service.js.
-
-    return {
-        weeklyAvailability,
-
-        savedOverrides:
-            Array.from(
-                combinedOverrides.values()
-            )
-    };
+    throw new Error(
+        'De beschikbaarheid wordt momenteel ' +
+        'gewijzigd op een ander apparaat. ' +
+        'Probeer opnieuw.'
+    );
 }
 
 
@@ -227,6 +237,98 @@ export async function saveAvailabilityChanges(
             'Unexpected number of saved changes'
         );
     }
+
+    return data;
+}
+
+
+// ====================================
+// 7. ACTUELE REVISIE OPHALEN
+// ====================================
+
+export async function fetchRevision() {
+
+    const { data, error } =
+        await supabase.rpc(
+            'get_availability_revision'
+        );
+
+    if (error) throw error;
+
+    return data;
+}
+
+
+// ====================================
+// 8. KALENDER OPSLAAN MET CONTROLE
+// ====================================
+
+export async function saveCalendarChecked(
+    changes,
+    expectedRevision
+) {
+
+    if (!Array.isArray(changes)) {
+
+        throw new Error(
+            'Changes must be an array'
+        );
+    }
+
+    if (changes.length === 0) {
+
+        return {
+            saved_count: 0,
+            revision: expectedRevision
+        };
+    }
+
+    const { data, error } =
+        await supabase.rpc(
+            'save_calendar_checked',
+            {
+                p_changes: changes,
+                p_expected_revision:
+                    expectedRevision
+            }
+        );
+
+    if (error) throw error;
+
+    if (
+        !data ||
+        data.saved_count !== changes.length
+    ) {
+
+        throw new Error(
+            'Unexpected saved count'
+        );
+    }
+
+    return data;
+}
+
+
+// ====================================
+// 9. STANDAARDWEEK OPSLAAN MET CONTROLE
+// ====================================
+
+export async function saveWeeklyChecked(
+    rows,
+    expectedRevision
+) {
+
+    const { data, error } =
+        await supabase.rpc(
+            'save_weekly_checked',
+            {
+                p_rows: rows,
+                p_expected_revision:
+                    expectedRevision
+            }
+        );
+
+    if (error) throw error;
 
     return data;
 }

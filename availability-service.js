@@ -16,7 +16,6 @@ import {
 
 // 1. Kalender initialiseren
 
-
 export async function initializeAvailability(
     userId,
     today = new Date()
@@ -26,7 +25,8 @@ export async function initializeAvailability(
 
     const {
         weeklyAvailability,
-        savedOverrides
+        savedOverrides,
+        revision
     } = await loadAvailabilityData(
         userId,
         startDate
@@ -38,6 +38,8 @@ export async function initializeAvailability(
         startDate,
         today
     );
+
+    state.revision = revision;
 
     let restoredChanges = 0;
     let storageWarning = null;

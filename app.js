@@ -1,5 +1,11 @@
 
 import {
+    fetchRevision,
+    saveCalendarChecked,
+    saveWeeklyChecked
+} from './availability-api.js';
+
+import {
     supabase
 } from './supabase-client.js';
 
@@ -76,14 +82,69 @@ function showStatus(message, type = '') {
 }
 
 
+
 function showError(error) {
 
     console.error(error);
 
-    showStatus(
-        error.message ?? String(error),
-        'error'
-    );
+    const technicalMessage =
+        error?.message ?? String(error);
+
+    let message = technicalMessage;
+
+    if (
+        technicalMessage.includes(
+            'AVAILABILITY_CONFLICT'
+        )
+    ) {
+
+        message =
+            'Je beschikbaarheid is gewijzigd ' +
+            'op een ander apparaat. ' +
+            'Je lokale wijzigingen zijn behouden. ' +
+            'Noteer je wijzigingen en vernieuw ' +
+            'de pagina voordat je opnieuw opslaat.';
+
+    } else if (
+
+        !navigator.onLine ||
+
+        /Failed to fetch|Load failed|NetworkError/i
+            .test(technicalMessage)
+
+    ) {
+
+        message =
+            'Geen verbinding met de server. ' +
+            'Controleer je internetverbinding. ' +
+            'Je kalenderwijzigingen zijn behouden.';
+
+    } else if (
+
+        /Auth session missing|JWT expired/i
+            .test(technicalMessage)
+
+    ) {
+
+        message =
+            'Je inlogsessie is niet meer geldig. ' +
+            'Vernieuw de pagina en log opnieuw in.';
+
+    } else if (
+
+        technicalMessage.includes(
+            'Past dates cannot be modified'
+        )
+
+    ) {
+
+        message =
+            'Een dag is inmiddels verstreken. ' +
+            'Vernieuw de kalender.';
+
+    }
+
+    showStatus(message, 'error');
 }
 
 
@@ -368,7 +429,21 @@ async function handleCalendarSave() {
         const result =
             await saveAllAvailability(
                 state,
-                currentUser.id
+                currentUser.id,
+
+                async changes => {
+
+                    const response =
+                        await saveCalendarChecked(
+                            changes,
+                            state.revision
+                        );
+
+                    state.revision =
+                        response.revision;
+
+                    return response.saved_count;
+                }
             );
 
         let message =
@@ -592,17 +667,10 @@ saveButton.addEventListener(
 
         try {
 
-            const { error } = await supabase
-                .from('weekly_availability')
-                .upsert(
-                    availability,
-                    {
-                        onConflict:
-                            'user_id,weekday'
-                    }
-                );
-
-            if (error) throw error;
+            await saveWeeklyChecked(
+                availability,
+                state.revision
+            );
 
             stored = true;
 
@@ -769,5 +837,227 @@ async function initialize() {
         showError(error);
     }
 }
+
+// ====================================
+// 13. ACTUALITEIT EN SYNCHRONISATIE
+// ====================================
+
+let checkingFreshness = false;
+let lastFreshnessCheck = 0;
+
+
+function hasUnsavedChanges() {
+
+    return weeklyDirty ||
+        (state?.getPendingCount() ?? 0) > 0;
+}
+
+
+async function checkFreshness(
+    localDateOnly = false
+) {
+
+    if (
+        !currentUser ||
+        !state ||
+        busy ||
+        checkingFreshness ||
+        document.hidden
+    ) {
+
+        return;
+    }
+
+    const newDay =
+        state.today !== formatDate(new Date());
+
+    // Periodieke lokale controle:
+    // alleen actie ondernemen bij een nieuwe dag.
+
+    if (localDateOnly && !newDay) {
+        return;
+    }
+
+    // Voorkom dubbele controles wanneer focus
+    // en visibilitychange tegelijk afgaan.
+
+    if (
+        !newDay &&
+        Date.now() - lastFreshnessCheck < 3000
+    ) {
+
+        return;
+    }
+
+    if (!navigator.onLine) {
+        return;
+    }
+
+    checkingFreshness = true;
+    lastFreshnessCheck = Date.now();
+
+    // Bewaar de state waarmee de controle begon.
+
+    const originalState = state;
+    const originalUserId = currentUser.id;
+
+    let refreshing = false;
+
+    try {
+
+        let needsRefresh = newDay;
+
+        if (!newDay) {
+
+            const remoteRevision =
+                await fetchRevision();
+
+            needsRefresh =
+                remoteRevision !== state?.revision;
+        }
+
+        // Tijdens het netwerkverzoek kan
+        // de gebruiker zijn uitgelogd of
+        // een andere opslag gestart hebben.
+
+        if (
+            !currentUser ||
+            currentUser.id !== originalUserId ||
+            state !== originalState ||
+            busy
+        ) {
+
+            return;
+        }
+
+        if (!needsRefresh) {
+            return;
+        }
+
+        // Nooit automatisch concepten wissen.
+
+        if (hasUnsavedChanges()) {
+
+            showStatus(
+
+                newDay
+
+                    ? 'Er is een nieuwe dag begonnen. ' +
+                      'Noteer je wijzigingen en ' +
+                      'vernieuw de pagina.'
+
+                    : 'Je gegevens zijn op een ander ' +
+                      'apparaat gewijzigd. ' +
+                      'Je conceptwijzigingen ' +
+                      'zijn behouden.',
+
+                'error'
+            );
+
+            return;
+        }
+
+        // Geen concepten: veilig vernieuwen.
+
+        refreshing = true;
+        busy = true;
+
+        updateControls();
+
+        showStatus('Kalender synchroniseren...');
+
+        await loadCalendar();
+
+        loadStandardWeek();
+
+        showStatus(
+            'Kalender is bijgewerkt',
+            'success'
+        );
+
+    } catch (error) {
+
+        showError(error);
+
+    } finally {
+
+        checkingFreshness = false;
+
+        if (refreshing) {
+
+            busy = false;
+
+            updateControls();
+        }
+    }
+}
+
+
+// Terugkeren naar een browsertabblad
+
+document.addEventListener(
+    'visibilitychange',
+    () => {
+
+        if (!document.hidden) {
+
+            checkFreshness();
+        }
+    }
+);
+
+
+// Terugkeren naar het browservenster
+
+window.addEventListener(
+    'focus',
+    () => checkFreshness()
+);
+
+
+// Netwerkverbinding verloren
+
+window.addEventListener(
+    'offline',
+    () => {
+
+        if (!currentUser) return;
+
+        showStatus(
+            'Geen internetverbinding. ' +
+            'Kalenderwijzigingen worden ' +
+            'tijdelijk lokaal bewaard.',
+            'error'
+        );
+    }
+);
+
+
+// Netwerkverbinding hersteld
+
+window.addEventListener(
+    'online',
+    () => {
+
+        if (!currentUser) return;
+
+        lastFreshnessCheck = 0;
+
+        showStatus(
+            'Internetverbinding hersteld'
+        );
+
+        checkFreshness();
+    }
+);
+
+
+// Iedere minuut controleren of
+// er een nieuwe dag is begonnen.
+
+setInterval(
+    () => checkFreshness(true),
+    60 * 1000
+);
 
 initialize();

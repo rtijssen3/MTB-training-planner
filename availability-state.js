@@ -40,6 +40,8 @@ export class AvailabilityState {
         );
 
         this.pendingChanges = new Map();
+
+        this.revision = null;
     }
 
 

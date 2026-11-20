@@ -423,3 +423,39 @@ button:disabled {
         font-size: 0.9rem;
     }
 }
+
+/* Verbeterde statusmeldingen */
+
+#status-message:empty {
+    display: none;
+}
+
+#status-message {
+    position: sticky;
+    bottom: 12px;
+    z-index: 100;
+
+    padding: 12px 16px;
+    border-radius: 8px;
+
+    background: #eef4f1;
+    color: #26332e;
+
+    box-shadow:
+        0 2px 12px rgba(0, 0, 0, 0.12);
+
+    font-size: 0.9rem;
+    line-height: 1.5;
+}
+
+#status-message.error {
+    background: #fce5e5;
+    color: #992727;
+    border: 1px solid #e0aaaa;
+}
+
+#status-message.success {
+    background: #e1f2e8;
+    color: #207653;
+    border: 1px solid #b2d9c2;
+}
