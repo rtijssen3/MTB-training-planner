@@ -1,0 +1,108 @@
+
+<!DOCTYPE html>
+<html lang="nl">
+
+<head>
+    <meta charset="UTF-8">
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1">
+
+    <title>Intervals.icu integration test</title>
+
+    <style>
+        body {
+            font-family: system-ui, sans-serif;
+            max-width: 650px;
+            margin: 40px auto;
+            padding: 16px;
+            line-height: 1.6;
+        }
+
+        button {
+            padding: 12px 18px;
+            background: #207653;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+        }
+
+        #result {
+            margin-top: 20px;
+            padding: 16px;
+            background: #f2f5f4;
+            border-radius: 8px;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1>Intervals.icu integration test</h1>
+
+    <p>
+        Deze pagina test de beveiligde verbinding
+        met Intervals.icu via Supabase.
+    </p>
+
+    <button id="test-button">
+        Test verbinding
+    </button>
+
+    <pre id="result">Nog niet getest.</pre>
+
+
+    <script type="module">
+
+        import {
+            testIntervalsConnection
+        } from '../intervals-api.js';
+
+        const button =
+            document.getElementById('test-button');
+
+        const result =
+            document.getElementById('result');
+
+
+        button.addEventListener('click', async () => {
+
+            button.disabled = true;
+
+            result.textContent =
+                'Verbinding testen...';
+
+            try {
+
+                const data =
+                    await testIntervalsConnection();
+
+                result.textContent =
+                    'PASS - Supabase authenticated\n' +
+                    'PASS - Edge Function executed\n' +
+                    'PASS - Intervals.icu connected\n\n' +
+                    JSON.stringify(data, null, 2);
+
+            } catch (error) {
+
+                console.error(error);
+
+                result.textContent =
+                    'FAIL - ' + error.message;
+
+            } finally {
+
+                button.disabled = false;
+            }
+        });
+
+    </script>
+
+</body>
+</html>
