@@ -1,0 +1,110 @@
+
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <title>Intervals model tests</title>
+</head>
+<body>
+
+<h1>Intervals.icu model tests</h1>
+<pre id="results"></pre>
+
+<script type="module">
+
+import {
+    normalizeActivity,
+    totalActivityMinutes
+} from '../intervals-model.js';
+
+const output = document.getElementById('results');
+
+let passed = 0;
+let failed = 0;
+
+function test(name, condition) {
+
+    const success = Boolean(condition);
+
+    output.textContent +=
+        `${success ? 'PASS' : 'FAIL'} - ${name}\n`;
+
+    if (success) passed++;
+    else failed++;
+}
+
+const rawActivity = {
+    id: 'i12345678',
+    start_date_local: '2026-11-18T18:30:00',
+    name: 'MTB intervaltraining',
+    type: 'MountainBikeRide',
+    moving_time: 5400,
+    icu_training_load: 105
+};
+
+const activity = normalizeActivity(rawActivity);
+
+test(
+    'Activity ID preserved',
+    activity.id === 'i12345678'
+);
+
+test(
+    'Local date extracted',
+    activity.date === '2026-11-18'
+);
+
+test(
+    'Seconds converted to minutes',
+    activity.durationMinutes === 90
+);
+
+test(
+    'Training load preserved',
+    activity.trainingLoad === 105
+);
+
+test(
+    'Sport type preserved',
+    activity.sport === 'MountainBikeRide'
+);
+
+const missing = normalizeActivity({
+    id: 'i2',
+    start_date_local: '2026-11-19T09:00:00'
+});
+
+test(
+    'Missing duration becomes null',
+    missing.durationMinutes === null
+);
+
+test(
+    'Missing load becomes null',
+    missing.trainingLoad === null
+);
+
+test(
+    'Sum of activity durations',
+    totalActivityMinutes([
+        activity,
+        {
+            ...activity,
+            durationMinutes: 60
+        }
+    ]) === 150
+);
+
+try {
+    normalizeActivity(null);
+    test('Invalid activity rejected', false);
+} catch {
+    test('Invalid activity rejected', true);
+}
+
+output.textContent +=
+    `\n${passed} passed, ${failed} failed`;
+
+</script>
+</body>
+</html>
