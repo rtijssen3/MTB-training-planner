@@ -1,245 +1,155 @@
-
 <!DOCTYPE html>
 <html lang="nl">
-
 <head>
-
-    <meta charset="UTF-8">
-
-    <meta name="viewport"
-          content="width=device-width, initial-scale=1">
-
-    <title>MTB Training Planner</title>
-
-    <link rel="stylesheet" href="style.css">
-    <link rel="stylesheet" href="./training-dashboard.css">
-
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#165a42">
+  <title>MTB Training Planner</title>
+  <link rel="stylesheet" href="./style.css">
+  <link rel="stylesheet" href="./training-dashboard.css">
   <link rel="stylesheet" href="./planner-overview.css">
   <link rel="stylesheet" href="./planner-navigation.css">
 </head>
-
 <body>
-
-<main class="container">
-
-    <h1>MTB Training Planner</h1>
-
-    <p class="subtitle">
-        V0.2 – Trainingsbeschikbaarheid
-    </p>
-
-    <!-- LOGIN -->
-
-    <section id="login-section" class="card">
-
-        <h2>Inloggen</h2>
-
-        <form id="login-form">
-
-            <label for="email">E-mailadres</label>
-
-            <input id="email"
-                   type="email"
-                   autocomplete="email"
-                   required>
-
-            <label for="password">Wachtwoord</label>
-
-            <input id="password"
-                   type="password"
-                   autocomplete="current-password"
-                   required>
-
-            <button type="submit">
-                Inloggen
-            </button>
-
-        </form>
-
+  <main class="container mtb-shell">
+    <!-- De login staat BUITEN dashboard-section. De navigatie staat ERBINNEN. -->
+    <section id="login-section" class="card mtb-login" aria-labelledby="login-title">
+      <div class="mtb-login-mark" aria-hidden="true">↗</div>
+      <p class="mtb-eyebrow">TRAIN · ADAPT · PROGRESS</p>
+      <h1 id="login-title">MTB Training Planner</h1>
+      <p class="mtb-login-subtitle">Je training in balans. Plan je beschikbare tijd, volg je trainingsbelasting en werk doelgericht aan je volgende MTB-uitdaging.</p>
+      <form id="login-form">
+        <label for="email">E-mailadres</label>
+        <input id="email" type="email" autocomplete="email" placeholder="jij@voorbeeld.nl" required>
+        <label for="password">Wachtwoord</label>
+        <input id="password" type="password" autocomplete="current-password" placeholder="Je wachtwoord" required>
+        <button type="submit" class="mtb-login-submit">Inloggen <span aria-hidden="true">→</span></button>
+      </form>
+      <p class="mtb-login-footnote">Je trainingsdata blijft gekoppeld aan je eigen account.</p>
     </section>
-
-
-    <!-- DASHBOARD -->
 
     <section id="dashboard-section" hidden>
-
-        <p id="user-email"></p>
-
-
-        <!-- KALENDER -->
-
-        <div class="card">
-
-            <!-- VOORTGANG -->
-            <section id="training-dashboard"></section>
-            <section id="tss-plan"></section>
-
-            <h2>Mijn trainingsplanner</h2>
-
-            <div id="calendar"></div>
-
-            <div class="calendar-legend">
-
-                <span>
-                    <i class="legend-dot standard"></i>
-                    Standaard
-                </span>
-
-                <span>
-                    <i class="legend-dot override"></i>
-                    Afwijking
-                </span>
-
-                <span>
-                    <i class="legend-dot pending"></i>
-                    Niet opgeslagen
-                </span>
-
-                <span>
-                    <i class="legend-dot past"></i>
-                    Verstreken
-                </span>
-
-            </div>           
-
-            <!-- DAGBEWERKING -->
-
-            <div id="day-editor" class="day-editor">
-
-                <h3 id="selected-date"></h3>
-
-                <p id="standard-availability"
-                   class="muted"></p>
-
-                <label for="day-minutes">
-                    Beschikbare trainingstijd
-                </label>
-
-                <output id="minutes-output"
-                        for="day-minutes"></output>
-
-                <input id="day-minutes"
-                       type="range"
-                       min="0"
-                       max="300"
-                       step="15">
-
-                <div class="slider-labels">
-                    <span>0u</span>
-                    <span>1u</span>
-                    <span>2u</span>
-                    <span>3u</span>
-                    <span>4u</span>
-                    <span>5u</span>
-                </div>
-
-                <label for="day-minutes-number">
-                    Minuten (exact)
-                </label>
-
-                <input id="day-minutes-number"
-                       type="number"
-                       min="0"
-                       max="1440"
-                       step="1">
-
-                <label for="day-workout">
-                    Vaste activiteit
-                </label>
-
-                <input id="day-workout"
-                       type="text"
-                       placeholder="Bijv. groepsrit">
-
-                <button id="reset-day-button"
-                        class="secondary">
-
-                    Herstel standaard voor deze dag
-
-                </button>
-
-            </div>
-
-
-            <!-- OPSLAG -->
-
-            <div class="calendar-actions">
-
-                <p id="pending-count"></p>
-
-                <button id="save-calendar-button"
-                        disabled>
-
-                    Alle wijzigingen opslaan
-
-                </button>
-
-                <button id="discard-calendar-button"
-                        class="secondary"
-                        disabled>
-
-                    Wijzigingen annuleren
-
-                </button>
-
-            </div>
-
+      <!-- App-header en navigatie zijn alleen zichtbaar als dashboard-section zichtbaar is. -->
+      <header class="mtb-app-header">
+        <div class="mtb-brand">
+          <div class="mtb-brand-icon" aria-hidden="true">↗</div>
+          <div>
+            <p class="mtb-brand-kicker">TRAIN SMARTER</p>
+            <h1>MTB <span>Training Planner</span></h1>
+          </div>
         </div>
+        <div class="mtb-header-actions">
+          <span id="user-email" class="mtb-account-email"></span>
+          <button id="logout-button" type="button" class="secondary mtb-logout">Uitloggen</button>
+        </div>
+      </header>
 
+      <nav id="planner-navigation" class="pn-navigation" aria-label="Hoofdnavigatie">
+        <button type="button" class="pn-nav-button" data-page="dashboard" aria-controls="pn-page-dashboard"><span class="pn-nav-icon" aria-hidden="true">◫</span>Dashboard</button>
+        <button type="button" class="pn-nav-button" data-page="weekplanner" aria-controls="pn-page-weekplanner"><span class="pn-nav-icon" aria-hidden="true">▦</span>Weekplanner</button>
+        <button type="button" class="pn-nav-button" data-page="analyse" aria-controls="pn-page-analyse"><span class="pn-nav-icon" aria-hidden="true">▥</span>Analyse</button>
+        <button type="button" class="pn-nav-button" data-page="instellingen" aria-controls="pn-page-instellingen"><span class="pn-nav-icon" aria-hidden="true">⚙</span>Instellingen</button>
+      </nav>
 
-        <!-- STANDAARDWEEK -->
+      <!-- DASHBOARD: één overzicht, zonder dubbele load-kaarten. -->
+      <section id="pn-page-dashboard" class="pn-page" aria-labelledby="pn-dashboard-title">
+        <div class="pn-page-heading">
+          <div><p class="pn-overline">TRAININGSOVERZICHT</p><h2 id="pn-dashboard-title">Jouw trainingsweek</h2><p class="pn-page-description">TSS/load als belangrijkste voortgangsmaat. Beschikbare tijd blijft de praktische randvoorwaarde.</p></div>
+          <button type="button" class="pn-outline-button" id="pn-open-planner">Bekijk weekplanner <span aria-hidden="true">→</span></button>
+        </div>
+        <section id="training-dashboard" aria-label="Trainingsbelasting en weekdoel"></section>
+        <!-- Niet meer activeren: behouden voor compatibiliteit met bestaande HTML/les 28. -->
+        <section id="tss-plan" hidden aria-hidden="true"></section>
+      </section>
 
-        <details class="card">
+      <!-- WEEKPLANNER: alle bestaande kalender-IDs exact behouden. -->
+      <section id="pn-page-weekplanner" class="pn-page" hidden aria-labelledby="pn-weekplanner-title">
+        <div class="pn-page-heading">
+          <div><p class="pn-overline">BESCHIKBAARHEID</p><h2 id="pn-weekplanner-title">Weekplanner</h2><p class="pn-page-description">Plan je beschikbare uren, maak daguitzonderingen en sla wijzigingen in één keer op.</p></div>
+        </div>
+        <div class="card pn-calendar-card">
+          <div id="calendar"></div>
+          <div class="calendar-legend">
+            <span><i class="legend-dot standard"></i> Standaard</span>
+            <span><i class="legend-dot override"></i> Afwijking</span>
+            <span><i class="legend-dot pending"></i> Niet opgeslagen</span>
+            <span><i class="legend-dot past"></i> Verstreken</span>
+          </div>
+          <div id="day-editor" class="day-editor">
+            <h3 id="selected-date"></h3>
+            <p id="standard-availability" class="muted"></p>
+            <label for="day-minutes">Beschikbare trainingstijd</label>
+            <output id="minutes-output" for="day-minutes"></output>
+            <input id="day-minutes" type="range" min="0" max="300" step="15">
+            <div class="slider-labels">
+              <span>0u</span><span>1u</span><span>2u</span><span>3u</span><span>4u</span><span>5u</span>
+            </div>
+            <label for="day-minutes-number">Minuten (exact)</label>
+            <input id="day-minutes-number" type="number" min="0" max="1440" step="1">
+            <label for="day-workout">Vaste activiteit</label>
+            <input id="day-workout" type="text" placeholder="Bijv. groepsrit">
+            <button id="reset-day-button" class="secondary" type="button">Herstel standaard voor deze dag</button>
+          </div>
+          <div class="calendar-actions">
+            <p id="pending-count"></p>
+            <button id="save-calendar-button" type="button" disabled>Alle wijzigingen opslaan</button>
+            <button id="discard-calendar-button" class="secondary" type="button" disabled>Wijzigingen annuleren</button>
+          </div>
+        </div>
+      </section>
 
-            <summary>
-                Instellingen standaardweek
-            </summary>
+      <!-- ANALYSE: wordt gevuld door planner-navigation.js. -->
+      <section id="pn-page-analyse" class="pn-page" hidden aria-labelledby="pn-analysis-title">
+        <div class="pn-page-heading"><div><p class="pn-overline">INZICHT</p><h2 id="pn-analysis-title">Trainingsanalyse</h2><p class="pn-page-description">Vergelijk de belasting over twaalf afgesloten trainingsweken.</p></div>
+          <button type="button" class="pn-outline-button" id="pn-analysis-refresh">Analyse vernieuwen</button>
+        </div>
+        <p id="pn-analysis-status" class="pn-inline-status" role="status">Open deze pagina om je trainingshistorie te laden.</p>
+        <div id="pn-analysis-content" hidden>
+          <div class="pn-kpi-grid">
+            <div class="pn-kpi"><span>Laatste 4 weken</span><strong id="pn-recent">—</strong><small>Gemiddelde load/week</small></div>
+            <div class="pn-kpi"><span>Vorige 4 weken</span><strong id="pn-previous">—</strong><small>Gemiddelde load/week</small></div>
+            <div class="pn-kpi"><span>Verandering</span><strong id="pn-change">—</strong><small>Recent t.o.v. vorig blok</small></div>
+          </div>
+          <div class="pn-data-card">
+            <h3>Week voor week</h3>
+            <div class="pn-table-wrapper"><table class="pn-table"><thead><tr><th>Week vanaf</th><th>Load</th><th>Activiteiten</th><th>Trainingsduur</th></tr></thead><tbody id="pn-analysis-rows"></tbody></table></div>
+            <p id="pn-analysis-quality" class="pn-note"></p>
+          </div>
+        </div>
+      </section>
 
-            <p class="muted">
-                Stel hier je normale wekelijkse
-                beschikbaarheid in.
-            </p>
-
+      <!-- INSTELLINGEN: standaardweek staat nu hier, geen los paneel onder de kalender. -->
+      <section id="pn-page-instellingen" class="pn-page" hidden aria-labelledby="pn-settings-title">
+        <div class="pn-page-heading"><div><p class="pn-overline">PERSOONLIJKE INSTELLINGEN</p><h2 id="pn-settings-title">Instellingen</h2><p class="pn-page-description">Beheer je vaste beschikbaarheid en controleer je gegevenskoppelingen.</p></div></div>
+        <div class="pn-settings-grid">
+          <details class="card pn-settings-card" open>
+            <summary>Standaardweek instellen</summary>
+            <p class="muted">Stel hier je normale wekelijkse beschikbaarheid in. Datumuitzonderingen wijzig je in de Weekplanner.</p>
             <h3 id="total-hours"></h3>
-
             <div id="availability-list"></div>
-
-            <button id="save-button" disabled>
-                Standaardweek opslaan
-            </button>
-
-        </details>
-
-
-        <!-- UITLOGGEN -->
-
-        <button id="logout-button"
-                class="secondary">
-
-            Uitloggen
-
-        </button>
-
+            <button id="save-button" type="button" disabled>Standaardweek opslaan</button>
+          </details>
+          <div class="card pn-settings-card">
+            <h3>Intervals.icu</h3>
+            <p class="muted">De persoonlijke API-key blijft veilig opgeslagen als Supabase Secret.</p>
+            <button id="pn-test-connection" type="button" class="pn-outline-button">Test verbinding</button>
+            <p id="pn-connection-result" role="status" class="pn-inline-status"></p>
+            <div class="pn-settings-divider"></div>
+            <h3>Account</h3>
+            <p id="pn-user-status" class="muted">Account controleren...</p>
+            <div class="pn-settings-divider"></div>
+            <h3>Trainingsprofiel</h3>
+            <p class="muted">FTP, trainingszones en wedstrijddoelen voegen we in volgende lessen toe.</p>
+          </div>
+        </div>
+      </section>
     </section>
 
+    <p id="status-message" role="status" aria-live="polite"></p>
+  </main>
 
-    <!-- STATUSMELDINGEN -->
-
-    <p id="status-message"
-       role="status"
-       aria-live="polite"></p>
-
-</main>
-
-<script type="module" src="app.js"></script>
-
-<!-- haal trainingsdashboard op -->
-
-
-
-
+  <script type="module" src="./app.js"></script>
   <script type="module" src="./planner-overview.js"></script>
   <script type="module" src="./planner-navigation.js"></script>
 </body>
-
 </html>

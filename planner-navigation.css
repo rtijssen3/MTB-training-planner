@@ -1,290 +1,79 @@
-
-/* =========================================
-   MTB Training Planner – Les 32
-   Navigatie en aanvullende paginaonderdelen
-   ========================================= */
-
-.pn-navigation {
-  position: relative;
-  z-index: 10;
-  background: #ffffff;
-  border: 1px solid #e1e9e3;
-  border-radius: 14px;
-  padding: 18px;
-  margin: 16px auto 24px;
-  max-width: 1200px;
-  box-sizing: border-box;
-  color: #24332d;
-}
-
-.pn-brand {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  margin-bottom: 18px;
-}
-
-.pn-brand strong {
-  font-size: 21px;
-  color: #207653;
-}
-
-.pn-brand small {
-  color: #68776e;
-  font-size: 12px;
-}
-
-.pn-nav-buttons {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.pn-nav-button {
-  border: 1px solid #e1e9e3;
-  background: #f7faf7;
-  color: #3c5145;
-  border-radius: 9px;
-  padding: 12px 8px;
-  font: inherit;
-  font-size: 14px;
-  cursor: pointer;
-  transition: background 0.15s ease;
-}
-
-.pn-nav-button:hover {
-  background: #e9f2eb;
-}
-
-.pn-nav-button.pn-nav-active {
-  background: #e5f2e8;
-  border-color: #a8cdb3;
-  color: #207653;
-  font-weight: 700;
-}
-
-.pn-nav-button:focus-visible,
-.pn-action:focus-visible {
-  outline: 3px solid #79b997;
-  outline-offset: 2px;
-}
-
-.pn-message {
-  color: #94611d;
-  font-size: 12px;
-  margin: 10px 0 0;
-}
-
-.pn-message:empty {
-  display: none;
-}
-
-/* Nieuwe analyses en instellingen */
-
-.pn-page {
-  display: block;
-  max-width: 1200px;
-  margin: 24px auto;
-  padding: 26px;
-  box-sizing: border-box;
-  background: #ffffff;
-  border: 1px solid #e1e9e3;
-  border-radius: 14px;
-  color: #24332d;
-  scroll-margin-top: 20px;
-}
-
-.pn-page[hidden] {
-  display: none !important;
-}
-
-#training-dashboard {
-  scroll-margin-top: 20px;
-}
-
-.pn-page h2 {
-  color: #207653;
-  margin: 0 0 8px;
-  font-size: 23px;
-}
-
-.pn-page h3 {
-  font-size: 17px;
-  margin: 24px 0 14px;
-}
-
-.pn-section-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.pn-section-header p {
-  color: #68776e;
-  font-size: 13px;
-}
-
-.pn-action {
-  border: 0;
-  border-radius: 8px;
-  background: #207653;
-  color: white;
-  padding: 11px 16px;
-  font: inherit;
-  font-size: 14px;
-  cursor: pointer;
-}
-
-.pn-action:hover:not(:disabled) {
-  background: #185b41;
-}
-
-.pn-action:disabled {
-  opacity: 0.5;
-  cursor: wait;
-}
-
-#pn-analysis-status,
-#pn-connection-result,
-#pn-user-status {
-  font-size: 13px;
-  color: #68776e;
-  line-height: 1.6;
-}
-
-.pn-analysis-stats {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-  margin: 22px 0;
-}
-
-.pn-stat {
-  background: #f0f6f1;
-  border-radius: 10px;
-  padding: 16px;
-  min-width: 0;
-}
-
-.pn-stat span {
-  display: block;
-  color: #56695e;
-  font-size: 12px;
-}
-
-.pn-stat strong {
-  display: block;
-  font-size: 26px;
-  margin: 7px 0;
-  font-variant-numeric: tabular-nums;
-}
-
-.pn-stat small {
-  color: #68776e;
-  font-size: 11px;
-}
-
-.pn-table-wrapper {
-  overflow-x: auto;
-}
-
-.pn-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.pn-table th,
-.pn-table td {
-  padding: 12px 10px;
-  border-bottom: 1px solid #e1e9e3;
-  text-align: left;
-  font-size: 13px;
-}
-
-.pn-table th {
-  background: #f7faf7;
-  color: #52665a;
-  font-weight: 600;
-}
-
-.pn-table td:nth-child(2) {
-  font-weight: 700;
-}
-
-.pn-note {
-  font-size: 12px;
-  color: #68776e;
-  line-height: 1.6;
-}
-
-.pn-settings-group {
-  border-top: 1px solid #e1e9e3;
-  margin-top: 22px;
-  padding-top: 2px;
-}
-
-.pn-settings-group p {
-  color: #68776e;
-  font-size: 13px;
-  line-height: 1.7;
-}
-
-.pn-settings-group .pn-success {
-  color: #207653 !important;
-  font-weight: 600;
-}
-
-.pn-settings-group .pn-error {
-  color: #b42318 !important;
-  font-weight: 600;
-}
-
-/* Mobiel */
-
-@media (max-width: 650px) {
-  .pn-navigation {
-    margin: 10px;
-    padding: 12px;
-  }
-
-  .pn-brand strong {
-    font-size: 18px;
-  }
-
-  .pn-nav-buttons {
-    gap: 4px;
-  }
-
-  .pn-nav-button {
-    font-size: 11px;
-    padding: 11px 3px;
-  }
-
-  .pn-page {
-    margin: 14px 10px;
-    padding: 16px;
-  }
-
-  .pn-section-header {
-    flex-direction: column;
-  }
-
-  .pn-analysis-stats {
-    gap: 7px;
-  }
-
-  .pn-stat {
-    padding: 10px;
-  }
-
-  .pn-stat strong {
-    font-size: 20px;
-  }
-
-  .pn-table th,
-  .pn-table td {
-    padding: 9px 6px;
-    font-size: 12px;
-  }
-}
+/* MTB Training Planner – les 33: volledige navigatie en vernieuwde UI */
+:root { --mtb-primary:#196c50; --mtb-dark:#153f32; --mtb-muted:#64776f; --mtb-border:#dce8e0; --mtb-bg:#f3f7f4; --mtb-card:#fff; --mtb-soft:#eaf4ed; }
+html { background:var(--mtb-bg); scroll-behavior:smooth; }
+body { background:linear-gradient(180deg,#e9f3ed 0,#f4f8f5 330px); min-height:100vh; color:#253c32; }
+body .mtb-shell { width:min(1180px,calc(100% - 32px)); max-width:1180px; margin:0 auto; padding:22px 0 60px; }
+[hidden], #dashboard-section[hidden], #login-section[hidden], .pn-page[hidden], #pn-analysis-content[hidden] { display:none !important; }
+button, input, summary { font:inherit; }
+button:focus-visible, input:focus-visible, summary:focus-visible { outline:3px solid #80bda2; outline-offset:3px; }
+/* Login: geheel apart van de app */
+#login-section.mtb-login { width:min(440px,100%); max-width:440px; margin:8vh auto 0; padding:42px; border:1px solid var(--mtb-border); border-radius:22px; box-shadow:0 20px 70px #123d2820; box-sizing:border-box; background:#fff; }
+.mtb-login-mark,.mtb-brand-icon { display:grid; place-items:center; background:var(--mtb-primary); color:#fff; font-size:30px; font-weight:700; border-radius:14px; width:52px; height:52px; transform:none; }
+.mtb-login .mtb-eyebrow,.mtb-brand-kicker,.pn-overline { color:var(--mtb-primary); font-size:11px; font-weight:800; letter-spacing:0.15em; text-transform:uppercase; margin:0 0 10px; }
+.mtb-login h1 { font-size:32px; line-height:1.13; letter-spacing:-0.04em; margin:4px 0 12px; color:var(--mtb-dark); }
+.mtb-login-subtitle { font-size:14px; line-height:1.7; color:var(--mtb-muted); margin:0 0 28px; }
+.mtb-login form { display:flex; flex-direction:column; gap:10px; }
+.mtb-login form label { font-size:13px; font-weight:650; color:#344e41; }
+.mtb-login input { width:100%; min-height:44px; border:1px solid #cddfd2; background:#fbfdfb; border-radius:10px; padding:10px 12px; box-sizing:border-box; margin-bottom:10px; }
+.mtb-login-submit { background:var(--mtb-primary) !important; border:0; color:white !important; min-height:48px; border-radius:10px; font-weight:700; display:flex; align-items:center; justify-content:space-between; padding:0 17px; cursor:pointer; }
+.mtb-login-footnote { color:#84918a; font-size:11px; margin:22px 0 0; text-align:center; }
+/* App header */
+.mtb-app-header { display:flex; justify-content:space-between; align-items:center; gap:20px; padding:9px 0 23px; }
+.mtb-brand { display:flex; align-items:center; gap:13px; min-width:0; }
+.mtb-brand-icon { width:47px; height:47px; flex:none; font-size:27px; }
+.mtb-brand-kicker { font-size:10px; margin-bottom:3px; }
+.mtb-brand h1 { margin:0; font-size:24px; line-height:1.1; color:var(--mtb-dark); letter-spacing:-0.03em; }
+.mtb-brand h1 span { font-weight:500; }
+.mtb-header-actions { display:flex; align-items:center; gap:16px; }
+.mtb-account-email { color:var(--mtb-muted); font-size:12px; overflow-wrap:anywhere; }
+#logout-button.mtb-logout { border:1px solid var(--mtb-border); background:#fff; color:var(--mtb-dark); font-weight:650; padding:10px 14px; border-radius:9px; cursor:pointer; white-space:nowrap; }
+/* Navigation: contained in dashboard-section, not in body */
+.pn-navigation { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); align-items:stretch; gap:8px; padding:7px; margin-bottom:26px; border:1px solid var(--mtb-border); border-radius:14px; background:#ffffffdb; box-shadow:0 8px 30px #0b3c2710; scroll-margin-top:16px; }
+.pn-nav-button { border:0; background:transparent; color:#526a5d; border-radius:10px; padding:12px 9px; display:flex; align-items:center; justify-content:center; gap:9px; cursor:pointer; font-weight:650; font-size:14px; transition:background .15s,color .15s; }
+.pn-nav-button:hover { background:#f0f6f1; }
+.pn-nav-button.pn-nav-active { background:var(--mtb-primary); color:#fff; box-shadow:0 3px 10px #196c5030; }
+.pn-nav-icon { font-size:19px; line-height:1; }
+/* Page headings and containers */
+.pn-page { display:block; min-width:0; }
+.pn-page-heading { display:flex; justify-content:space-between; align-items:center; gap:18px; margin-bottom:18px; }
+.pn-page-heading h2 { font-size:29px; margin:0 0 7px; letter-spacing:-.035em; color:var(--mtb-dark); line-height:1.15; }
+.pn-page-description { color:var(--mtb-muted); line-height:1.6; max-width:670px; margin:0; font-size:14px; }
+.pn-outline-button { border:1px solid #bcd5c5; border-radius:9px; background:white; color:var(--mtb-primary); padding:11px 15px; font-size:13px; font-weight:700; cursor:pointer; white-space:nowrap; }
+.pn-outline-button:hover { background:var(--mtb-soft); }
+/* Dashboard card: fresh visual, existing behavior preserved */
+#pn-page-dashboard #training-dashboard { margin:0; border:1px solid var(--mtb-border); box-shadow:0 12px 30px #143a2410; border-radius:16px; }
+#pn-page-dashboard #tss-plan { display:none !important; }
+/* Calendar and day editor */
+.pn-calendar-card, .pn-data-card, .pn-settings-card { background:#fff; border:1px solid var(--mtb-border); border-radius:16px; box-shadow:0 10px 30px #143a2410; padding:24px; }
+.pn-calendar-card #calendar { margin-bottom:15px; }
+.pn-calendar-card .calendar-legend { display:flex; flex-wrap:wrap; align-items:center; gap:12px 18px; padding:14px 0 20px; font-size:12px; color:var(--mtb-muted); }
+.pn-calendar-card .calendar-legend span { display:inline-flex; gap:6px; align-items:center; }
+.pn-calendar-card .day-editor { border-radius:12px; background:#f6faf7; padding:20px; margin:0 0 18px; border:1px solid #e1ece4; }
+.pn-calendar-card .day-editor h3 { margin-top:0; color:var(--mtb-dark); }
+.pn-calendar-card .calendar-actions { padding-top:14px; border-top:1px solid var(--mtb-border); }
+/* Analysis and settings */
+.pn-kpi-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin:18px 0; }
+.pn-kpi { background:#fff; border:1px solid var(--mtb-border); border-radius:14px; padding:20px; box-shadow:0 6px 20px #143a2408; }
+.pn-kpi span,.pn-kpi small { display:block; font-size:12px; color:var(--mtb-muted); }
+.pn-kpi strong { display:block; font-size:32px; line-height:1.3; font-variant-numeric:tabular-nums; color:var(--mtb-dark); margin:8px 0 5px; }
+.pn-data-card h3 { margin:0 0 16px; color:var(--mtb-dark); }
+.pn-table-wrapper { overflow:auto; }
+.pn-table { width:100%; border-collapse:collapse; min-width:500px; }
+.pn-table th,.pn-table td { border-bottom:1px solid #e6eee8; padding:13px 12px; text-align:left; font-size:13px; }
+.pn-table th { color:var(--mtb-muted); font-weight:700; background:#f4f8f5; }
+.pn-table tbody tr:hover { background:#f6faf7; }
+.pn-table td:nth-child(2) { color:var(--mtb-primary); font-weight:750; }
+.pn-note,.pn-inline-status { font-size:12px; color:var(--mtb-muted); line-height:1.65; }
+.pn-inline-status { margin:15px 0; }
+.pn-error { color:#b42318 !important; }
+.pn-success { color:var(--mtb-primary) !important; font-weight:700; }
+.pn-settings-grid { display:grid; grid-template-columns:minmax(0,1.35fr) minmax(0,1fr); gap:18px; align-items:start; }
+.pn-settings-card { margin:0 !important; min-width:0; box-sizing:border-box; }
+.pn-settings-card summary { cursor:pointer; color:var(--mtb-dark); font-weight:750; font-size:17px; }
+.pn-settings-card h3 { margin:0 0 12px; color:var(--mtb-dark); font-size:17px; }
+.pn-settings-card p { line-height:1.6; }
+.pn-settings-card details summary { margin-bottom:14px; }
+.pn-settings-divider { border-top:1px solid var(--mtb-border); margin:24px 0; }
+#status-message { font-size:13px; max-width:760px; margin:18px auto; }
+@media(max-width:760px) { .mtb-app-header { align-items:flex-start; } .mtb-account-email { display:none; } .mtb-brand h1 { font-size:19px; } .pn-settings-grid { grid-template-columns:1fr; } .pn-page-heading { align-items:flex-start; flex-direction:column; } .pn-page-heading h2 { font-size:25px; } }
+@media(max-width:540px) { body .mtb-shell { width:calc(100% - 22px); padding-top:12px; } #login-section.mtb-login { padding:25px 20px; margin-top:7vh; } .pn-navigation { gap:3px; padding:5px; } .pn-nav-button { gap:5px; flex-direction:column; font-size:10px; padding:10px 2px; } .pn-nav-icon { font-size:19px; } .pn-calendar-card,.pn-data-card,.pn-settings-card { padding:15px; } .pn-kpi-grid { gap:7px; } .pn-kpi { padding:12px 9px; } .pn-kpi strong { font-size:22px; } .pn-kpi span,.pn-kpi small { font-size:10px; } .mtb-brand-icon { width:39px; height:39px; font-size:23px; } #logout-button.mtb-logout { padding:9px 10px; } }
