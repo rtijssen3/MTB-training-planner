@@ -14,6 +14,7 @@
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="./training-dashboard.css">
 
+  <link rel="stylesheet" href="./planner-overview.css">
 </head>
 
 <body>
@@ -233,20 +234,10 @@
 
 <!-- haal trainingsdashboard op -->
 
-<script type="module">
-  import {
-    initializeTrainingDashboard
-  } from './training-dashboard.js';
-
-  import {
-    initializeTssPlan
-  } from './tss-plan-ui.js';
-
-  initializeTrainingDashboard();
-  initializeTssPlan();
-</script>
 
 
+
+  <script type="module" src="./planner-overview.js"></script>
 </body>
 
 </html>
