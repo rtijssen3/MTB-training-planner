@@ -70,6 +70,7 @@
 
             <!-- VOORTGANG -->
             <section id="training-dashboard"></section>
+            <section id="tss-plan"></section>
 
             <h2>Mijn trainingsplanner</h2>
 
@@ -231,13 +232,20 @@
 <script type="module" src="app.js"></script>
 
 <!-- haal trainingsdashboard op -->
+
 <script type="module">
   import {
     initializeTrainingDashboard
   } from './training-dashboard.js';
 
+  import {
+    initializeTssPlan
+  } from './tss-plan-ui.js';
+
   initializeTrainingDashboard();
+  initializeTssPlan();
 </script>
+
 
 </body>
 
