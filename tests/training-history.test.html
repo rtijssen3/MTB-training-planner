@@ -1,0 +1,250 @@
+
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <title>Les 29 – Training History Tests</title>
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      max-width: 850px;
+      margin: 40px auto;
+      padding: 0 20px;
+    }
+
+    h1 { color: #207653; }
+    .pass { color: #207653; }
+    .fail { color: #b42318; }
+    .result { margin: 9px 0; }
+  </style>
+</head>
+
+<body>
+  <h1>Les 29 – Training History Tests</h1>
+  <div id="results"></div>
+  <h2 id="summary"></h2>
+
+  <script type="module">
+    import {
+      getHistoryRanges,
+      analyzeTrainingHistory
+    } from '../training-history.js';
+
+    import {
+      getWeekDates
+    } from '../weekly-progress.js';
+
+    const output = document.getElementById('results');
+
+    let passed = 0;
+    let failed = 0;
+
+    function equal(actual, expected) {
+      if (actual !== expected) {
+        throw new Error(
+          `Verwacht ${expected}, ontvangen ${actual}`
+        );
+      }
+    }
+
+    function assert(condition, message) {
+      if (!condition) {
+        throw new Error(message);
+      }
+    }
+
+    function test(name, callback) {
+      const row = document.createElement('div');
+      row.className = 'result';
+
+      try {
+        callback();
+        passed++;
+        row.className += ' pass';
+        row.textContent = 'PASS – ' + name;
+      } catch (error) {
+        failed++;
+        row.className += ' fail';
+        row.textContent =
+          'FAIL – ' + name + ': ' + error.message;
+      }
+
+      output.appendChild(row);
+    }
+
+    // Donderdag 19 november 2026.
+    const today = new Date(2026, 10, 19);
+
+    const ranges = getHistoryRanges(today);
+
+    // Simuleer 12 weken:
+    // elke week precies één activiteit.
+    const monday = new Date(2026, 7, 24);
+
+    const weeklyLoads = [
+      100, 120, 140, 160,
+      200, 220, 240, 260,
+      300, 320, 340, 360
+    ];
+
+    const activities = weeklyLoads.map(
+      (load, index) => {
+        const date = new Date(monday);
+
+        date.setDate(
+          monday.getDate() + index * 7
+        );
+
+        const year = date.getFullYear();
+        const month = String(
+          date.getMonth() + 1
+        ).padStart(2, '0');
+        const day = String(
+          date.getDate()
+        ).padStart(2, '0');
+
+        return {
+          id: `activity-${index}`,
+          start_date_local:
+            `${year}-${month}-${day}T09:00:00`,
+          name: `Training week ${index + 1}`,
+          type: 'Ride',
+          moving_time: 3600,
+          icu_training_load: load
+        };
+      }
+    );
+
+    const history = analyzeTrainingHistory({
+      today,
+      rawActivities: activities
+    });
+
+    test('Er zijn drie API-periodes', () => {
+      equal(ranges.length, 3);
+    });
+
+    test('Eerste periode begint op maandag', () => {
+      equal(ranges[0].oldest, '2026-08-24');
+    });
+
+    test('Laatste periode eindigt op zondag', () => {
+      equal(ranges[2].newest, '2026-11-15');
+    });
+
+    test('Iedere periode duurt 28 dagen', () => {
+      const expected = [
+        ['2026-08-24', '2026-09-20'],
+        ['2026-09-21', '2026-10-18'],
+        ['2026-10-19', '2026-11-15']
+      ];
+
+      for (let i = 0; i < 3; i++) {
+        equal(ranges[i].oldest, expected[i][0]);
+        equal(ranges[i].newest, expected[i][1]);
+      }
+    });
+
+    test('De huidige week valt buiten historie', () => {
+      const currentWeek = getWeekDates(today);
+      assert(
+        history.end < currentWeek[0],
+        'Huidige week is meegenomen.'
+      );
+    });
+
+    test('Het overzicht telt 12 weken', () => {
+      equal(history.weeks.length, 12);
+    });
+
+    test('Er zijn 12 activiteiten', () => {
+      equal(history.activityCount, 12);
+    });
+
+    test('De eerste week heeft load 100', () => {
+      equal(history.weeks[0].load, 100);
+    });
+
+    test('De laatste week heeft load 360', () => {
+      equal(history.weeks[11].load, 360);
+    });
+
+    test('Oudste gemiddelde is 130', () => {
+      equal(history.oldestFourWeekAverage, 130);
+    });
+
+    test('Vorige gemiddelde is 230', () => {
+      equal(history.previousFourWeekAverage, 230);
+    });
+
+    test('Recente gemiddelde is 330', () => {
+      equal(history.recentFourWeekAverage, 330);
+    });
+
+    test('Twaalfweeksgemiddelde is 230', () => {
+      equal(history.allTwelveWeekAverage, 230);
+    });
+
+    test('Dubbele activiteit telt één keer', () => {
+      const result = analyzeTrainingHistory({
+        today,
+        rawActivities: [
+          ...activities,
+          activities[0]
+        ]
+      });
+
+      equal(result.activityCount, 12);
+    });
+
+    test('Ontbrekende load wordt gesignaleerd', () => {
+      const result = analyzeTrainingHistory({
+        today,
+        rawActivities: [
+          ...activities,
+          {
+            ...activities[0],
+            id: 'unknown',
+            icu_training_load: null
+          }
+        ]
+      });
+
+      equal(result.totalMissingLoad, 1);
+    });
+
+    test('Een lege week wordt herkend', () => {
+      const result = analyzeTrainingHistory({
+        today,
+        rawActivities: activities.slice(1)
+      });
+
+      equal(result.emptyWeeks, 1);
+    });
+
+    test('Een toekomstige activiteit telt niet mee', () => {
+      const result = analyzeTrainingHistory({
+        today,
+        rawActivities: [
+          ...activities,
+          {
+            ...activities[0],
+            id: 'future',
+            start_date_local:
+              '2026-11-20T10:00:00'
+          }
+        ]
+      });
+
+      equal(result.activityCount, 12);
+    });
+
+    test('Totale trainingsload klopt', () => {
+      equal(history.totalLoad, 2760);
+    });
+
+    document.getElementById('summary').textContent =
+      `${passed} geslaagd, ${failed} mislukt`;
+  </script>
+</body>
+</html>
