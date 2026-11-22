@@ -1,0 +1,336 @@
+
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1">
+
+  <title>Intervals.icu – Activities Integration Test</title>
+
+  <style>
+    :root {
+      font-family: system-ui, sans-serif;
+      color: #24332d;
+      background: #f5f7f5;
+    }
+
+    body {
+      max-width: 1000px;
+      margin: 40px auto;
+      padding: 0 20px;
+    }
+
+    h1 {
+      color: #207653;
+    }
+
+    button {
+      background: #207653;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 12px 20px;
+      cursor: pointer;
+      font-size: 15px;
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: wait;
+    }
+
+    .panel {
+      background: white;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 18px 0;
+      box-shadow: 0 2px 12px #0000000a;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin: 20px 0;
+    }
+
+    .stat {
+      background: #edf5ef;
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .stat strong {
+      display: block;
+      font-size: 26px;
+      margin-top: 5px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    th, td {
+      text-align: left;
+      padding: 12px 8px;
+      border-bottom: 1px solid #e4e9e5;
+    }
+
+    th {
+      color: #65736b;
+      font-size: 13px;
+    }
+
+    .pass {
+      color: #207653;
+      font-weight: 600;
+    }
+
+    .fail {
+      color: #b42318;
+      font-weight: 600;
+    }
+
+    .muted {
+      color: #65736b;
+    }
+
+    .table-wrapper {
+      overflow-x: auto;
+    }
+
+    @media (max-width: 600px) {
+      .stats {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <h1>Les 25 – Intervals.icu activiteiten</h1>
+
+  <p>
+    Integration-test: echte trainingen ophalen
+    over de afgelopen 30 kalenderdagen.
+  </p>
+
+  <div class="panel">
+    <button id="loadButton">
+      Haal trainingen op
+    </button>
+
+    <p id="status" class="muted">
+      Nog geen test uitgevoerd.
+    </p>
+
+    <p id="period" class="muted"></p>
+  </div>
+
+  <div class="panel" id="results" hidden>
+    <h2>Mijn uitgevoerde trainingen</h2>
+
+    <div class="stats">
+      <div class="stat">
+        Activiteiten
+        <strong id="activityCount">0</strong>
+      </div>
+
+      <div class="stat">
+        Trainingsduur
+        <strong id="totalDuration">0m</strong>
+      </div>
+
+      <div class="stat">
+        Totale load
+        <strong id="totalLoad">0</strong>
+      </div>
+    </div>
+
+    <div class="table-wrapper">
+      <table>
+        <thead>
+          <tr>
+            <th>Datum</th>
+            <th>Training</th>
+            <th>Sport</th>
+            <th>Duur</th>
+            <th>Load</th>
+          </tr>
+        </thead>
+
+        <tbody id="activityRows"></tbody>
+      </table>
+    </div>
+
+    <p id="emptyMessage" class="muted" hidden>
+      Geen trainingen gevonden in deze periode.
+    </p>
+  </div>
+
+  <script type="module">
+    import {
+      fetchIntervalsActivities
+    } from '../intervals-api.js';
+
+    import {
+      normalizeActivity,
+      totalActivityMinutes
+    } from '../intervals-model.js';
+
+    const button = document.getElementById('loadButton');
+    const status = document.getElementById('status');
+    const period = document.getElementById('period');
+    const results = document.getElementById('results');
+    const rows = document.getElementById('activityRows');
+    const emptyMessage = document.getElementById('emptyMessage');
+
+    function formatLocalDate(date) {
+      const year = date.getFullYear();
+      const month = String(
+        date.getMonth() + 1
+      ).padStart(2, '0');
+
+      const day = String(
+        date.getDate()
+      ).padStart(2, '0');
+
+      return `${year}-${month}-${day}`;
+    }
+
+    function formatMinutes(minutes) {
+      if (minutes == null) return '–';
+
+      const hours = Math.floor(minutes / 60);
+      const rest = minutes % 60;
+
+      if (hours === 0) return `${rest}m`;
+
+      return `${hours}u ${rest}m`;
+    }
+
+    function formatDisplayDate(value) {
+      const [year, month, day] =
+        value.split('-').map(Number);
+
+      return new Intl.DateTimeFormat('nl-NL', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric'
+      }).format(new Date(year, month - 1, day));
+    }
+
+    function addCell(row, value) {
+      const cell = document.createElement('td');
+      cell.textContent = String(value);
+      row.appendChild(cell);
+    }
+
+    function renderActivities(activities) {
+      rows.replaceChildren();
+
+      const sorted = [...activities].sort(
+        (a, b) => b.date.localeCompare(a.date)
+      );
+
+      for (const activity of sorted) {
+        const row = document.createElement('tr');
+
+        addCell(row, formatDisplayDate(activity.date));
+        addCell(row, activity.name);
+        addCell(row, activity.sport);
+        addCell(
+          row,
+          formatMinutes(activity.durationMinutes)
+        );
+        addCell(
+          row,
+          activity.trainingLoad ?? '–'
+        );
+
+        rows.appendChild(row);
+      }
+
+      const totalMinutes =
+        totalActivityMinutes(activities);
+
+      const totalLoad = activities.reduce(
+        (sum, activity) =>
+          sum + (activity.trainingLoad ?? 0),
+        0
+      );
+
+      document.getElementById(
+        'activityCount'
+      ).textContent = activities.length;
+
+      document.getElementById(
+        'totalDuration'
+      ).textContent = formatMinutes(totalMinutes);
+
+      document.getElementById(
+        'totalLoad'
+      ).textContent = String(
+        Math.round(totalLoad)
+      );
+
+      emptyMessage.hidden = activities.length > 0;
+      results.hidden = false;
+    }
+
+    async function runTest() {
+      button.disabled = true;
+      results.hidden = true;
+
+      status.className = 'muted';
+      status.textContent = 'Trainingen ophalen...';
+
+      try {
+        const today = new Date();
+
+        const start = new Date(
+          today.getFullYear(),
+          today.getMonth(),
+          today.getDate() - 29
+        );
+
+        const oldest = formatLocalDate(start);
+        const newest = formatLocalDate(today);
+
+        period.textContent =
+          `Periode: ${oldest} t/m ${newest}`;
+
+        const rawActivities =
+          await fetchIntervalsActivities(
+            oldest,
+            newest
+          );
+
+        const activities = rawActivities.map(
+          normalizeActivity
+        );
+
+        renderActivities(activities);
+
+        status.className = 'pass';
+        status.textContent =
+          `PASS – ${activities.length} activiteiten ` +
+          `succesvol opgehaald en verwerkt.`;
+
+      } catch (error) {
+        console.error(error);
+
+        status.className = 'fail';
+        status.textContent =
+          `FAIL – ${error.message}`;
+      } finally {
+        button.disabled = false;
+      }
+    }
+
+    button.addEventListener('click', runTest);
+  </script>
+</body>
+</html>

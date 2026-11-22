@@ -1,79 +1,87 @@
 
-import {
-    supabase
-} from './supabase-client.js';
+import { supabase } from './supabase-client.js';
 
+async function invokeIntervals(body) {
+  const {
+    data: sessionData,
+    error: sessionError
+  } = await supabase.auth.getSession();
 
-export async function testIntervalsConnection() {
+  if (sessionError) {
+    throw sessionError;
+  }
 
-    // Controleer eerst de lokale sessie.
+  if (!sessionData.session) {
+    throw new Error('Log eerst in op de MTB-planner.');
+  }
 
-    const { data: sessionData, error: sessionError } =
-        await supabase.auth.getSession();
+  const { data, error } = await supabase.functions.invoke(
+    'intervals-read',
+    { body }
+  );
 
-    if (sessionError) {
-        throw sessionError;
-    }
+  if (error) {
+    let message = 'Verbinding met Intervals.icu mislukt.';
 
-    if (!sessionData.session) {
+    if (error.context instanceof Response) {
+      try {
+        const response = await error.context.json();
 
-        throw new Error(
-            'Log eerst in op de MTB-planner.'
-        );
-    }
-
-
-    // Roep de beveiligde Edge Function aan.
-
-    const { data, error } =
-        await supabase.functions.invoke(
-            'intervals-read',
-            {
-                body: {
-                    action: 'test-connection'
-                }
-            }
-        );
-
-
-    // Supabase kan foutdetails in de
-    // HTTP-response beschikbaar stellen.
-
-    if (error) {
-
-        let message =
-            'Verbinding met Intervals.icu mislukt.';
-
-        if (error.context instanceof Response) {
-
-            try {
-
-                const response =
-                    await error.context.json();
-
-                if (response?.error) {
-                    message = response.error;
-                }
-
-            } catch {
-                // Behoud standaardfoutmelding.
-            }
+        if (typeof response?.error === 'string') {
+          message = response.error;
         }
-
-        throw new Error(message);
+      } catch {
+        // Gebruik de algemene foutmelding.
+      }
     }
 
+    throw new Error(message);
+  }
 
-    if (
-        !data ||
-        data.connected !== true ||
-        data.provider !== 'intervals.icu'
-    ) {
+  return data;
+}
 
-        throw new Error(
-            'Onverwacht antwoord van de Edge Function.'
-        );
-    }
+// Bestaande functie uit les 24.
+export async function testIntervalsConnection() {
+  const data = await invokeIntervals({
+    action: 'test-connection'
+  });
 
-    return data;
+  if (
+    !data ||
+    data.connected !== true ||
+    data.provider !== 'intervals.icu'
+  ) {
+    throw new Error(
+      'Onverwacht antwoord van de Edge Function.'
+    );
+  }
+
+  return data;
+}
+
+// Nieuwe functie uit les 25.
+export async function fetchIntervalsActivities(
+  oldest,
+  newest
+) {
+  const data = await invokeIntervals({
+    action: 'list-activities',
+    oldest,
+    newest
+  });
+
+  if (
+    !data ||
+    data.provider !== 'intervals.icu' ||
+    !Array.isArray(data.activities) ||
+    data.oldest !== oldest ||
+    data.newest !== newest
+  ) {
+    throw new Error(
+      'Onverwacht activiteitenantwoord van de Edge Function.'
+    );
+  }
+
+  return data.activities;
 }
