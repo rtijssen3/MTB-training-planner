@@ -12,6 +12,7 @@
     <title>MTB Training Planner</title>
 
     <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="./training-dashboard.css">
 
 </head>
 
@@ -67,7 +68,10 @@
 
         <div class="card">
 
-            <h2>Mijn trainingskalender</h2>
+            <!-- VOORTGANG -->
+            <section id="training-dashboard"></section>
+
+            <h2>Mijn trainingsplanner</h2>
 
             <div id="calendar"></div>
 
@@ -93,8 +97,7 @@
                     Verstreken
                 </span>
 
-            </div>
-
+            </div>           
 
             <!-- DAGBEWERKING -->
 
@@ -226,6 +229,15 @@
 </main>
 
 <script type="module" src="app.js"></script>
+
+<!-- haal trainingsdashboard op -->
+<script type="module">
+  import {
+    initializeTrainingDashboard
+  } from './training-dashboard.js';
+
+  initializeTrainingDashboard();
+</script>
 
 </body>
 
