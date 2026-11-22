@@ -1,0 +1,30 @@
+<!doctype html><html lang="nl"><head><meta charset="UTF-8"><title>Les 34 – Periodisering tests</title><style>body{font-family:system-ui;margin:40px auto;max-width:800px;padding:0 20px}h1{color:#196c50}.pass{color:#196c50}.fail{color:#ac2828}li{margin:8px 0}</style></head><body>
+<h1>Les 34 – Periodisering unit tests</h1><ol id="tests"></ol><h2 id="result"></h2>
+<script type="module">
+import { nextMonday, dateKey, createDraft, validateDraft, assessDraft, validLoad } from '../periodization-model.js';
+let success=0,fail=0;
+function check(name,fn){const li=document.createElement('li');try{fn();li.textContent='PASS – '+name;li.className='pass';success++;}catch(e){li.textContent='FAIL – '+name+': '+e.message;li.className='fail';fail++;}document.getElementById('tests').append(li);}
+function eq(actual,expected){if(actual!==expected)throw Error(`Verwacht ${expected}, ontvangen ${actual}`)}
+function throws(fn){let threw=false;try{fn()}catch{threw=true}eq(threw,true)}
+const date=new Date(2026,10,22);
+const draft=createDraft({today:date,baseLoad:400,buildPercent:5,recoveryPercent:70});
+check('Volgende maandag na zondag 22 november is 23 november',()=>eq(dateKey(nextMonday(date)),'2026-11-23'));
+check('Volgende maandag na maandag blijft volgende week',()=>eq(dateKey(nextMonday(new Date(2026,10,23))),'2026-11-30'));
+check('Vier weken opgesteld',()=>eq(draft.weeks.length,4));
+check('Week 1 begint 23 november',()=>eq(draft.weeks[0].start,'2026-11-23'));
+check('Week 4 begint 14 december',()=>eq(draft.weeks[3].start,'2026-12-14'));
+check('Week 1 is 400 load',()=>eq(draft.weeks[0].targetLoad,400));
+check('Week 2 is 420 load',()=>eq(draft.weeks[1].targetLoad,420));
+check('Week 3 is 440 load',()=>eq(draft.weeks[2].targetLoad,440));
+check('Week 4 is 280 load',()=>eq(draft.weeks[3].targetLoad,280));
+check('Concept valideren',()=>eq(validateDraft(draft).weeks.length,4));
+check('De totale doelbelasting is 1540',()=>eq(assessDraft(draft,400).totalLoad,1540));
+check('Geen onvolledige datummodellen',()=>throws(()=>validateDraft({...draft,weeks:draft.weeks.map((w,i)=>i===2?{...w,end:'2026-12-31'}:w)})));
+check('Geen lege load',()=>throws(()=>validLoad('')));
+check('Geen nul-load',()=>throws(()=>validLoad(0)));
+check('Niet-geheel load afgewezen',()=>throws(()=>validLoad(23.2)));
+check('Onbekend gemiddelde leidt tot waarschuwing',()=>eq(assessDraft(draft,0).notes.length>0,true));
+check('Missende historie leidt tot waarschuwing',()=>eq(assessDraft(draft,400,{emptyWeeks:1}).notes.length>0,true));
+check('Hoge eerste week leidt tot waarschuwing',()=>eq(assessDraft(draft,250).notes.some(n=>n.includes('10%')),true));
+document.getElementById('result').textContent=`${success} geslaagd, ${fail} mislukt`;
+</script></body></html>
