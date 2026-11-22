@@ -1,0 +1,293 @@
+
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1">
+
+  <title>Les 30 – CTL / ATL / TSB</title>
+
+  <style>
+    :root {
+      font-family: system-ui, sans-serif;
+      background: #f5f7f5;
+      color: #24332d;
+    }
+
+    body {
+      max-width: 960px;
+      margin: 40px auto;
+      padding: 0 18px;
+    }
+
+    h1 { color: #207653; }
+
+    .panel {
+      background: white;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 18px 0;
+    }
+
+    button {
+      padding: 12px 18px;
+      border: 0;
+      border-radius: 8px;
+      background: #207653;
+      color: white;
+      cursor: pointer;
+      font: inherit;
+    }
+
+    button:disabled { opacity: 0.5; }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+    }
+
+    .stat {
+      background: #edf5ef;
+      padding: 14px;
+      border-radius: 8px;
+    }
+
+    .stat strong {
+      display: block;
+      font-size: 25px;
+      margin-top: 8px;
+    }
+
+    .muted { color: #68776e; }
+    .success { color: #207653; }
+    .error { color: #b42318; }
+
+    .table-wrapper { overflow-x: auto; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    th, td {
+      text-align: left;
+      padding: 10px;
+      border-bottom: 1px solid #e1e9e3;
+    }
+
+    @media (max-width: 650px) {
+      .stats { grid-template-columns: repeat(2, 1fr); }
+    }
+  </style>
+</head>
+
+<body>
+  <h1>Les 30 – Fitnessanalyse</h1>
+
+  <div class="panel">
+    <p>
+      CTL, ATL, TSB en ramp rate uit Intervals.icu.
+    </p>
+
+    <button id="load">
+      Haal fitnessgegevens op
+    </button>
+
+    <p id="status" class="muted">
+      Nog geen test uitgevoerd.
+    </p>
+  </div>
+
+  <div id="overview" class="panel" hidden>
+    <h2>Actuele trainingsbelasting</h2>
+
+    <p id="date" class="muted"></p>
+
+    <div class="stats">
+      <div class="stat">
+        CTL
+        <strong id="ctl">—</strong>
+      </div>
+
+      <div class="stat">
+        ATL
+        <strong id="atl">—</strong>
+      </div>
+
+      <div class="stat">
+        TSB
+        <strong id="tsb">—</strong>
+      </div>
+
+      <div class="stat">
+        Ramp rate
+        <strong id="ramp">—</strong>
+      </div>
+    </div>
+
+    <h3>Dagelijkse ontwikkeling</h3>
+
+    <div class="table-wrapper">
+      <table>
+        <thead>
+          <tr>
+            <th>Datum</th>
+            <th>CTL</th>
+            <th>ATL</th>
+            <th>TSB</th>
+            <th>Ramp rate</th>
+          </tr>
+        </thead>
+
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+
+    <p id="quality" class="muted"></p>
+  </div>
+
+  <script type="module">
+    import {
+      fetchIntervalsWellness
+    } from '../intervals-api.js';
+
+    import {
+      analyzeFitnessData
+    } from '../fitness-model.js';
+
+    import {
+      toLocalDateKey
+    } from '../weekly-progress.js';
+
+    const button = document.getElementById('load');
+    const status = document.getElementById('status');
+    const overview = document.getElementById('overview');
+
+    function byId(id) {
+      return document.getElementById(id);
+    }
+
+    function number(value) {
+      return value === null
+        ? '—'
+        : value.toFixed(1);
+    }
+
+    function addCell(row, value) {
+      const cell = document.createElement('td');
+      cell.textContent = String(value);
+      row.appendChild(cell);
+    }
+
+    function render(analysis) {
+      if (!analysis.hasData) {
+        throw new Error(
+          'Geen CTL/ATL-gegevens gevonden.'
+        );
+      }
+
+      const latest = analysis.latest;
+
+      byId('date').textContent =
+        `Laatste beschikbare datum: ${latest.date}`;
+
+      byId('ctl').textContent = number(latest.ctl);
+      byId('atl').textContent = number(latest.atl);
+      byId('tsb').textContent = number(latest.tsb);
+      byId('ramp').textContent =
+        number(latest.rampRate);
+
+      const rows = byId('rows');
+      rows.replaceChildren();
+
+      for (const day of [...analysis.days].reverse()) {
+        const row = document.createElement('tr');
+
+        addCell(row, day.date);
+        addCell(row, number(day.ctl));
+        addCell(row, number(day.atl));
+        addCell(row, number(day.tsb));
+        addCell(row, number(day.rampRate));
+
+        rows.appendChild(row);
+      }
+
+      const warnings = [];
+
+      if (analysis.missingFitnessDays > 0) {
+        warnings.push(
+          `${analysis.missingFitnessDays} records ` +
+          'hebben geen volledige CTL/ATL-waarden.'
+        );
+      }
+
+      warnings.push(
+        'TSB is hier berekend als CTL - ATL ' +
+        'voor dezelfde recorddatum.'
+      );
+
+      byId('quality').textContent =
+        warnings.join(' ');
+
+      overview.hidden = false;
+    }
+
+    async function run() {
+      button.disabled = true;
+      overview.hidden = true;
+
+      status.className = 'muted';
+      status.textContent =
+        'Fitnessgegevens ophalen...';
+
+      try {
+        const today = new Date();
+
+        const oldestDate = new Date(
+          today.getFullYear(),
+          today.getMonth(),
+          today.getDate() - 27
+        );
+
+        const oldest = toLocalDateKey(oldestDate);
+        const newest = toLocalDateKey(today);
+
+        const records =
+          await fetchIntervalsWellness(
+            oldest,
+            newest
+          );
+
+        const analysis =
+          analyzeFitnessData(records);
+
+        render(analysis);
+
+        status.className = 'success';
+        status.textContent =
+          `PASS – ${analysis.days.length} ` +
+          'dagrecords verwerkt.';
+
+        console.log(
+          'Fitness analysis:',
+          analysis
+        );
+
+      } catch (error) {
+        console.error(error);
+
+        status.className = 'error';
+        status.textContent =
+          `FAIL – ${error.message}`;
+
+      } finally {
+        button.disabled = false;
+      }
+    }
+
+    button.addEventListener('click', run);
+  </script>
+</body>
+</html>

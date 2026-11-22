@@ -141,14 +141,6 @@ function renderProgress(progress) {
 
   stats.appendChild(
     createStat(
-      'Weekdoel TSS',
-      '—',
-      'Wordt later toegevoegd'
-    )
-  );
-
-  stats.appendChild(
-    createStat(
       'Uitgevoerde training',
       formatTrainingMinutes(
         progress.totalCompletedMinutes

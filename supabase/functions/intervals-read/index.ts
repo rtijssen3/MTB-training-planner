@@ -114,14 +114,18 @@ export default {
 
       if (
         body.action !== 'test-connection' &&
-        body.action !== 'list-activities'
+        body.action !== 'list-activities' &&
+        body.action !== 'list-wellness'
       ) {
         return errorResponse('Unknown action', 400);
       }
 
       let path = '/athlete/0/profile';
 
-      if (body.action === 'list-activities') {
+      if (
+        body.action === 'list-activities' ||
+        body.action === 'list-wellness'
+      ) {
         const dateError = validateRange(
           body.oldest,
           body.newest
@@ -136,7 +140,11 @@ export default {
           newest: body.newest!
         });
 
-        path = '/athlete/0/activities?' + params.toString();
+        const resource = body.action === 'list-wellness'
+          ? 'wellness'
+          : 'activities';
+
+        path = `/athlete/0/${resource}?${params.toString()}`;
       }
 
       let response: Response;
@@ -197,6 +205,44 @@ export default {
         return Response.json({
           connected: true,
           provider: 'intervals.icu'
+        });
+      }
+
+
+      if (body.action === 'list-wellness') {
+        if (!Array.isArray(result)) {
+          return errorResponse(
+            'Ongeldig wellnessantwoord van Intervals.icu.',
+            502
+          );
+        }
+
+        function finiteOrNull(value: unknown): number | null {
+          return typeof value === 'number' &&
+            Number.isFinite(value)
+            ? value
+            : null;
+        }
+
+        const wellness = result
+          .filter((record) =>
+            record &&
+            typeof record === 'object' &&
+            typeof record.id === 'string' &&
+            /^\d{4}-\d{2}-\d{2}$/.test(record.id)
+          )
+          .map((record) => ({
+            date: record.id,
+            ctl: finiteOrNull(record.ctl),
+            atl: finiteOrNull(record.atl),
+            rampRate: finiteOrNull(record.rampRate)
+          }));
+
+        return Response.json({
+          provider: 'intervals.icu',
+          oldest: body.oldest,
+          newest: body.newest,
+          wellness
         });
       }
 

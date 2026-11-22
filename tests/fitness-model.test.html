@@ -1,0 +1,212 @@
+
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <title>Les 30 – Fitness Model Tests</title>
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      max-width: 820px;
+      margin: 40px auto;
+      padding: 0 20px;
+    }
+
+    h1 { color: #207653; }
+    .pass { color: #207653; }
+    .fail { color: #b42318; }
+    .result { margin: 10px 0; }
+  </style>
+</head>
+<body>
+  <h1>Les 30 – Fitness Model Tests</h1>
+  <div id="results"></div>
+  <h2 id="summary"></h2>
+
+  <script type="module">
+    import {
+      normalizeFitnessDay,
+      analyzeFitnessData
+    } from '../fitness-model.js';
+
+    const output = document.getElementById('results');
+
+    let passed = 0;
+    let failed = 0;
+
+    function equal(actual, expected) {
+      if (actual !== expected) {
+        throw new Error(
+          `Verwacht ${expected}, ontvangen ${actual}`
+        );
+      }
+    }
+
+    function test(name, callback) {
+      const item = document.createElement('div');
+      item.className = 'result';
+
+      try {
+        callback();
+        item.classList.add('pass');
+        item.textContent = 'PASS – ' + name;
+        passed++;
+      } catch (error) {
+        item.classList.add('fail');
+        item.textContent =
+          'FAIL – ' + name + ': ' + error.message;
+        failed++;
+      }
+
+      output.appendChild(item);
+    }
+
+    const records = [
+      {
+        date: '2026-11-18',
+        ctl: 55,
+        atl: 65,
+        rampRate: 1.2
+      },
+      {
+        date: '2026-11-19',
+        ctl: 56,
+        atl: 62,
+        rampRate: 1.0
+      },
+      {
+        date: '2026-11-20',
+        ctl: 57,
+        atl: 64,
+        rampRate: 1.1
+      }
+    ];
+
+    test('CTL wordt gelezen', () => {
+      equal(
+        normalizeFitnessDay(records[0]).ctl,
+        55
+      );
+    });
+
+    test('ATL wordt gelezen', () => {
+      equal(
+        normalizeFitnessDay(records[0]).atl,
+        65
+      );
+    });
+
+    test('TSB = CTL - ATL', () => {
+      equal(
+        normalizeFitnessDay(records[0]).tsb,
+        -10
+      );
+    });
+
+    test('Ramp rate blijft behouden', () => {
+      equal(
+        normalizeFitnessDay(records[0]).rampRate,
+        1.2
+      );
+    });
+
+    test('Ontbrekende ATL geeft onbekende TSB', () => {
+      const day = normalizeFitnessDay({
+        date: '2026-11-21',
+        ctl: 60,
+        atl: null
+      });
+
+      equal(day.tsb, null);
+    });
+
+    test('Nul is een geldige belastingwaarde', () => {
+      const day = normalizeFitnessDay({
+        date: '2026-11-21',
+        ctl: 0,
+        atl: 0
+      });
+
+      equal(day.tsb, 0);
+    });
+
+    test('Ongeldige datum wordt geweigerd', () => {
+      let rejected = false;
+
+      try {
+        normalizeFitnessDay({
+          date: '2026-02-30',
+          ctl: 10,
+          atl: 20
+        });
+      } catch {
+        rejected = true;
+      }
+
+      equal(rejected, true);
+    });
+
+    const analysis = analyzeFitnessData(
+      [...records].reverse()
+    );
+
+    test('Records worden op datum gesorteerd', () => {
+      equal(
+        analysis.days[0].date,
+        '2026-11-18'
+      );
+    });
+
+    test('Laatste datum klopt', () => {
+      equal(
+        analysis.latest.date,
+        '2026-11-20'
+      );
+    });
+
+    test('Laatste CTL klopt', () => {
+      equal(analysis.latest.ctl, 57);
+    });
+
+    test('Laatste TSB klopt', () => {
+      equal(analysis.latest.tsb, -7);
+    });
+
+    test('CTL-verandering is +2', () => {
+      equal(analysis.ctlChange, 2);
+    });
+
+    test('Dubbele datums worden samengevoegd', () => {
+      const result = analyzeFitnessData([
+        ...records,
+        records[0]
+      ]);
+
+      equal(result.days.length, 3);
+    });
+
+    test('Lege reeks heeft geen fitnessdata', () => {
+      equal(
+        analyzeFitnessData([]).hasData,
+        false
+      );
+    });
+
+    test('Ontbrekende CTL wordt geteld', () => {
+      const result = analyzeFitnessData([
+        ...records,
+        {
+          date: '2026-11-21',
+          ctl: null,
+          atl: 60
+        }
+      ]);
+
+      equal(result.missingFitnessDays, 1);
+    });
+
+    document.getElementById('summary').textContent =
+      `${passed} geslaagd, ${failed} mislukt`;
+  </script>
+</body>
+</html>

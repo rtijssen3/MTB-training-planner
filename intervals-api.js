@@ -85,3 +85,31 @@ export async function fetchIntervalsActivities(
 
   return data.activities;
 }
+
+// Haal dagelijkse fitness-/belastingsgegevens op.
+// Maximaal 31 kalenderdagen per verzoek,
+// afgedwongen door de Edge Function.
+export async function fetchIntervalsWellness(
+  oldest,
+  newest
+) {
+  const data = await invokeIntervals({
+    action: 'list-wellness',
+    oldest,
+    newest
+  });
+
+  if (
+    !data ||
+    data.provider !== 'intervals.icu' ||
+    data.oldest !== oldest ||
+    data.newest !== newest ||
+    !Array.isArray(data.wellness)
+  ) {
+    throw new Error(
+      'Onverwacht wellnessantwoord van de Edge Function.'
+    );
+  }
+
+  return data.wellness;
+}
