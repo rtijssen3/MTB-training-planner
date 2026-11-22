@@ -1,0 +1,290 @@
+
+/* =========================================
+   MTB Training Planner – Les 32
+   Navigatie en aanvullende paginaonderdelen
+   ========================================= */
+
+.pn-navigation {
+  position: relative;
+  z-index: 10;
+  background: #ffffff;
+  border: 1px solid #e1e9e3;
+  border-radius: 14px;
+  padding: 18px;
+  margin: 16px auto 24px;
+  max-width: 1200px;
+  box-sizing: border-box;
+  color: #24332d;
+}
+
+.pn-brand {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-bottom: 18px;
+}
+
+.pn-brand strong {
+  font-size: 21px;
+  color: #207653;
+}
+
+.pn-brand small {
+  color: #68776e;
+  font-size: 12px;
+}
+
+.pn-nav-buttons {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.pn-nav-button {
+  border: 1px solid #e1e9e3;
+  background: #f7faf7;
+  color: #3c5145;
+  border-radius: 9px;
+  padding: 12px 8px;
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.pn-nav-button:hover {
+  background: #e9f2eb;
+}
+
+.pn-nav-button.pn-nav-active {
+  background: #e5f2e8;
+  border-color: #a8cdb3;
+  color: #207653;
+  font-weight: 700;
+}
+
+.pn-nav-button:focus-visible,
+.pn-action:focus-visible {
+  outline: 3px solid #79b997;
+  outline-offset: 2px;
+}
+
+.pn-message {
+  color: #94611d;
+  font-size: 12px;
+  margin: 10px 0 0;
+}
+
+.pn-message:empty {
+  display: none;
+}
+
+/* Nieuwe analyses en instellingen */
+
+.pn-page {
+  display: block;
+  max-width: 1200px;
+  margin: 24px auto;
+  padding: 26px;
+  box-sizing: border-box;
+  background: #ffffff;
+  border: 1px solid #e1e9e3;
+  border-radius: 14px;
+  color: #24332d;
+  scroll-margin-top: 20px;
+}
+
+.pn-page[hidden] {
+  display: none !important;
+}
+
+#training-dashboard {
+  scroll-margin-top: 20px;
+}
+
+.pn-page h2 {
+  color: #207653;
+  margin: 0 0 8px;
+  font-size: 23px;
+}
+
+.pn-page h3 {
+  font-size: 17px;
+  margin: 24px 0 14px;
+}
+
+.pn-section-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.pn-section-header p {
+  color: #68776e;
+  font-size: 13px;
+}
+
+.pn-action {
+  border: 0;
+  border-radius: 8px;
+  background: #207653;
+  color: white;
+  padding: 11px 16px;
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.pn-action:hover:not(:disabled) {
+  background: #185b41;
+}
+
+.pn-action:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
+#pn-analysis-status,
+#pn-connection-result,
+#pn-user-status {
+  font-size: 13px;
+  color: #68776e;
+  line-height: 1.6;
+}
+
+.pn-analysis-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 22px 0;
+}
+
+.pn-stat {
+  background: #f0f6f1;
+  border-radius: 10px;
+  padding: 16px;
+  min-width: 0;
+}
+
+.pn-stat span {
+  display: block;
+  color: #56695e;
+  font-size: 12px;
+}
+
+.pn-stat strong {
+  display: block;
+  font-size: 26px;
+  margin: 7px 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.pn-stat small {
+  color: #68776e;
+  font-size: 11px;
+}
+
+.pn-table-wrapper {
+  overflow-x: auto;
+}
+
+.pn-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.pn-table th,
+.pn-table td {
+  padding: 12px 10px;
+  border-bottom: 1px solid #e1e9e3;
+  text-align: left;
+  font-size: 13px;
+}
+
+.pn-table th {
+  background: #f7faf7;
+  color: #52665a;
+  font-weight: 600;
+}
+
+.pn-table td:nth-child(2) {
+  font-weight: 700;
+}
+
+.pn-note {
+  font-size: 12px;
+  color: #68776e;
+  line-height: 1.6;
+}
+
+.pn-settings-group {
+  border-top: 1px solid #e1e9e3;
+  margin-top: 22px;
+  padding-top: 2px;
+}
+
+.pn-settings-group p {
+  color: #68776e;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.pn-settings-group .pn-success {
+  color: #207653 !important;
+  font-weight: 600;
+}
+
+.pn-settings-group .pn-error {
+  color: #b42318 !important;
+  font-weight: 600;
+}
+
+/* Mobiel */
+
+@media (max-width: 650px) {
+  .pn-navigation {
+    margin: 10px;
+    padding: 12px;
+  }
+
+  .pn-brand strong {
+    font-size: 18px;
+  }
+
+  .pn-nav-buttons {
+    gap: 4px;
+  }
+
+  .pn-nav-button {
+    font-size: 11px;
+    padding: 11px 3px;
+  }
+
+  .pn-page {
+    margin: 14px 10px;
+    padding: 16px;
+  }
+
+  .pn-section-header {
+    flex-direction: column;
+  }
+
+  .pn-analysis-stats {
+    gap: 7px;
+  }
+
+  .pn-stat {
+    padding: 10px;
+  }
+
+  .pn-stat strong {
+    font-size: 20px;
+  }
+
+  .pn-table th,
+  .pn-table td {
+    padding: 9px 6px;
+    font-size: 12px;
+  }
+}

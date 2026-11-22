@@ -1,0 +1,243 @@
+
+<!DOCTYPE html>
+<html lang="nl">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1">
+
+    <title>MTB Training Planner</title>
+
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="./training-dashboard.css">
+
+  <link rel="stylesheet" href="./planner-overview.css">
+</head>
+
+<body>
+
+<main class="container">
+
+    <h1>MTB Training Planner</h1>
+
+    <p class="subtitle">
+        V0.2 – Trainingsbeschikbaarheid
+    </p>
+
+    <!-- LOGIN -->
+
+    <section id="login-section" class="card">
+
+        <h2>Inloggen</h2>
+
+        <form id="login-form">
+
+            <label for="email">E-mailadres</label>
+
+            <input id="email"
+                   type="email"
+                   autocomplete="email"
+                   required>
+
+            <label for="password">Wachtwoord</label>
+
+            <input id="password"
+                   type="password"
+                   autocomplete="current-password"
+                   required>
+
+            <button type="submit">
+                Inloggen
+            </button>
+
+        </form>
+
+    </section>
+
+
+    <!-- DASHBOARD -->
+
+    <section id="dashboard-section" hidden>
+
+        <p id="user-email"></p>
+
+
+        <!-- KALENDER -->
+
+        <div class="card">
+
+            <!-- VOORTGANG -->
+            <section id="training-dashboard"></section>
+            <section id="tss-plan"></section>
+
+            <h2>Mijn trainingsplanner</h2>
+
+            <div id="calendar"></div>
+
+            <div class="calendar-legend">
+
+                <span>
+                    <i class="legend-dot standard"></i>
+                    Standaard
+                </span>
+
+                <span>
+                    <i class="legend-dot override"></i>
+                    Afwijking
+                </span>
+
+                <span>
+                    <i class="legend-dot pending"></i>
+                    Niet opgeslagen
+                </span>
+
+                <span>
+                    <i class="legend-dot past"></i>
+                    Verstreken
+                </span>
+
+            </div>           
+
+            <!-- DAGBEWERKING -->
+
+            <div id="day-editor" class="day-editor">
+
+                <h3 id="selected-date"></h3>
+
+                <p id="standard-availability"
+                   class="muted"></p>
+
+                <label for="day-minutes">
+                    Beschikbare trainingstijd
+                </label>
+
+                <output id="minutes-output"
+                        for="day-minutes"></output>
+
+                <input id="day-minutes"
+                       type="range"
+                       min="0"
+                       max="300"
+                       step="15">
+
+                <div class="slider-labels">
+                    <span>0u</span>
+                    <span>1u</span>
+                    <span>2u</span>
+                    <span>3u</span>
+                    <span>4u</span>
+                    <span>5u</span>
+                </div>
+
+                <label for="day-minutes-number">
+                    Minuten (exact)
+                </label>
+
+                <input id="day-minutes-number"
+                       type="number"
+                       min="0"
+                       max="1440"
+                       step="1">
+
+                <label for="day-workout">
+                    Vaste activiteit
+                </label>
+
+                <input id="day-workout"
+                       type="text"
+                       placeholder="Bijv. groepsrit">
+
+                <button id="reset-day-button"
+                        class="secondary">
+
+                    Herstel standaard voor deze dag
+
+                </button>
+
+            </div>
+
+
+            <!-- OPSLAG -->
+
+            <div class="calendar-actions">
+
+                <p id="pending-count"></p>
+
+                <button id="save-calendar-button"
+                        disabled>
+
+                    Alle wijzigingen opslaan
+
+                </button>
+
+                <button id="discard-calendar-button"
+                        class="secondary"
+                        disabled>
+
+                    Wijzigingen annuleren
+
+                </button>
+
+            </div>
+
+        </div>
+
+
+        <!-- STANDAARDWEEK -->
+
+        <details class="card">
+
+            <summary>
+                Instellingen standaardweek
+            </summary>
+
+            <p class="muted">
+                Stel hier je normale wekelijkse
+                beschikbaarheid in.
+            </p>
+
+            <h3 id="total-hours"></h3>
+
+            <div id="availability-list"></div>
+
+            <button id="save-button" disabled>
+                Standaardweek opslaan
+            </button>
+
+        </details>
+
+
+        <!-- UITLOGGEN -->
+
+        <button id="logout-button"
+                class="secondary">
+
+            Uitloggen
+
+        </button>
+
+    </section>
+
+
+    <!-- STATUSMELDINGEN -->
+
+    <p id="status-message"
+       role="status"
+       aria-live="polite"></p>
+
+</main>
+
+<script type="module" src="app.js"></script>
+
+<!-- haal trainingsdashboard op -->
+
+
+
+
+  <script type="module" src="./planner-overview.js"></script>
+</body>
+
+</html>
