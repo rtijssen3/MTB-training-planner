@@ -1,0 +1,182 @@
+
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <title>Les 26 – Weekly Progress Unit Tests</title>
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      max-width: 850px;
+      margin: 40px auto;
+      padding: 0 20px;
+    }
+    h1 { color: #207653; }
+    .pass { color: #207653; }
+    .fail { color: #b42318; }
+    pre { line-height: 1.8; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <h1>Les 26 – Unit Tests</h1>
+  <pre id="output"></pre>
+
+  <script type="module">
+    import {
+      getWeekDates,
+      buildWeeklyProgress,
+      formatTrainingMinutes
+    } from '../weekly-progress.js';
+
+    const output = document.getElementById('output');
+    let passed = 0;
+    let failed = 0;
+
+    function test(name, fn) {
+      try {
+        fn();
+        passed++;
+        const line = document.createElement('div');
+        line.className = 'pass';
+        line.textContent = `PASS – ${name}`;
+        output.appendChild(line);
+      } catch (error) {
+        failed++;
+        const line = document.createElement('div');
+        line.className = 'fail';
+        line.textContent = `FAIL – ${name}: ${error.message}`;
+        output.appendChild(line);
+      }
+    }
+
+    function assertEqual(actual, expected) {
+      if (actual !== expected) {
+        throw new Error(
+          `Verwacht ${expected}, ontvangen ${actual}`
+        );
+      }
+    }
+
+    const referenceDate = new Date(2026, 10, 19);
+
+    const dates = getWeekDates(referenceDate);
+
+    const minutes = [0, 90, 120, 90, 0, 60, 180];
+
+    const availability = Object.fromEntries(
+      dates.map((date, index) => [
+        date,
+        { available_minutes: minutes[index] }
+      ])
+    );
+
+    const activities = [
+      {
+        id: 'a1',
+        start_date_local: '2026-11-17T08:00:00',
+        name: 'MTB',
+        type: 'Ride',
+        moving_time: 3600,
+        icu_training_load: 75
+      },
+      {
+        id: 'a2',
+        start_date_local: '2026-11-18T18:00:00',
+        name: 'Indoor',
+        type: 'VirtualRide',
+        moving_time: 5400,
+        icu_training_load: 90
+      },
+      {
+        id: 'a3',
+        start_date_local: '2026-11-18T20:00:00',
+        name: 'Core',
+        type: 'WeightTraining',
+        moving_time: 1800,
+        icu_training_load: 15
+      }
+    ];
+
+    const result = buildWeeklyProgress({
+      date: referenceDate,
+      availabilityByDate: availability,
+      rawActivities: activities
+    });
+
+    test('Week begint op maandag', () => {
+      assertEqual(dates[0], '2026-11-16');
+    });
+
+    test('Week eindigt op zondag', () => {
+      assertEqual(dates[6], '2026-11-22');
+    });
+
+    test('Beschikbaarheid is 540 minuten', () => {
+      assertEqual(result.totalAvailableMinutes, 540);
+    });
+
+    test('Uitgevoerde training is 180 minuten', () => {
+      assertEqual(result.totalCompletedMinutes, 180);
+    });
+
+    test('Drie activiteiten worden geteld', () => {
+      assertEqual(result.totalActivityCount, 3);
+    });
+
+    test('Trainingsload is 180', () => {
+      assertEqual(result.totalTrainingLoad, 180);
+    });
+
+    test('Woensdag heeft twee activiteiten', () => {
+      assertEqual(result.days[2].activityCount, 2);
+    });
+
+    test('Weekvoortgang is 33%', () => {
+      assertEqual(result.weekProgressPercent, 33);
+    });
+
+    test('Toekomstige dagen tellen niet mee in benutting', () => {
+      assertEqual(result.elapsedAvailableMinutes, 300);
+      assertEqual(result.elapsedUtilizationPercent, 60);
+    });
+
+    test('Tijdnotatie werkt', () => {
+      assertEqual(formatTrainingMinutes(135), '2u 15m');
+    });
+
+    test('Dubbele activiteit wordt niet dubbel geteld', () => {
+      const duplicate = buildWeeklyProgress({
+        date: referenceDate,
+        availabilityByDate: availability,
+        rawActivities: [...activities, activities[0]]
+      });
+
+      assertEqual(duplicate.totalActivityCount, 3);
+    });
+
+    test('Ontbrekende trainingsduur wordt geregistreerd', () => {
+      const unknownDuration = buildWeeklyProgress({
+        date: referenceDate,
+        availabilityByDate: availability,
+        rawActivities: [
+          {
+            id: 'unknown',
+            start_date_local: '2026-11-18T10:00:00',
+            name: 'Unknown',
+            type: 'Ride',
+            moving_time: null,
+            icu_training_load: null
+          }
+        ]
+      });
+
+      assertEqual(unknownDuration.missingDurationCount, 1);
+    });
+
+    const summary = document.createElement('h2');
+    summary.textContent =
+      `${passed} geslaagd, ${failed} mislukt`;
+    output.appendChild(summary);
+  </script>
+</body>
+</html>
