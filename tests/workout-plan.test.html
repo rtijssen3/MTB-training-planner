@@ -1,0 +1,33 @@
+<!DOCTYPE html><html lang="nl"><head><meta charset="UTF-8"><title>Les 35 – Workout plan tests</title><style>body{font:16px system-ui;max-width:850px;margin:40px auto;padding:0 20px}h1{color:#196c50}.pass{color:#196c50}.fail{color:#ba3128}li{margin:8px 0}</style></head><body>
+<h1>Les 35 – Workout plan tests</h1><ol id="results"></ol><h2 id="summary"></h2>
+<script type="module">
+import { estimateLoad, evaluateWorkoutPlan, proposeWorkoutWeek } from '../workout-plan-model.js';
+import { createDraft, dateKey } from '../periodization-model.js';
+const week = createDraft({today:new Date(2026,10,22),baseLoad:450}).weeks[0];
+const dates = Array.from({length:7},(_,i)=>{const d=new Date(`${week.start}T12:00:00`);d.setDate(d.getDate()+i);return dateKey(d)});
+const caps=[0,90,120,90,0,60,180];
+const availability=Object.fromEntries(dates.map((date,i)=>[date,{available_minutes:caps[i]}]));
+const result=proposeWorkoutWeek({week,availabilityByDate:availability});
+let passed=0,failed=0;
+function test(name,fn){let ok=true,msg='';try{if(!fn())throw new Error('Onjuist resultaat');passed++}catch(e){ok=false;failed++;msg=e.message}const li=document.createElement('li');li.className=ok?'pass':'fail';li.textContent=(ok?'PASS ':'FAIL ')+name+(msg?' – '+msg:'');document.getElementById('results').appendChild(li)}
+const throws=fn=>{try{fn();return false}catch{return true}};
+test('Fietssessie van 60 min IF .65 ≈42 load',()=>estimateLoad('endurance',60)===42);
+test('Een thresholdtraining gebruikt hogere gemiddelde IF',()=>estimateLoad('threshold',60)>estimateLoad('endurance',60));
+test('Een VO2-training gebruikt hogere sessie-IF',()=>estimateLoad('vo2max',60)>estimateLoad('threshold',60));
+test('Zeven kalenderdagen',()=>result.days.length===7);
+test('Dagelijks niet meer minuten dan beschikbaar',()=>result.days.every(d=>(d.session?.durationMinutes??0)<=d.availableMinutes));
+test('Maximaal twee intensieve trainingen',()=>result.intensitySessions<=2);
+test('Geen opeenvolgende intensieve dagen',()=>{const x=result.days.flatMap((d,i)=>d.session&&d.session.type!=='endurance'?[i]:[]);return x.every((n,i)=>i===0||n-x[i-1]>=2)});
+test('Niet-beschikbare dagen zijn leeg',()=>result.days.filter(d=>d.availableMinutes===0).every(d=>!d.session));
+test('Load totaal is som van sessies',()=>result.totalLoad===result.sessions.reduce((s,a)=>s+a.estimatedLoad,0));
+test('Tijd totaal is som van sessies',()=>result.totalMinutes===result.sessions.reduce((s,a)=>s+a.durationMinutes,0));
+test('Beschikbare tijd 540 minuten',()=>result.availableMinutes===540);
+test('Handmatige overschrijding wordt geweigerd',()=>throws(()=>evaluateWorkoutPlan({week,availabilityByDate:availability,sessions:[{date:dates[1],type:'endurance',durationMinutes:120}]})));
+test('Dubbele training op dezelfde dag wordt geweigerd',()=>throws(()=>evaluateWorkoutPlan({week,availabilityByDate:availability,sessions:[{date:dates[1],type:'endurance',durationMinutes:60},{date:dates[1],type:'vo2max',durationMinutes:60}]})));
+test('Trainingstype onbekend geweigerd',()=>throws(()=>estimateLoad('sprint',60)));
+test('Herstelweek geen intensieve trainingen voorgesteld',()=>{const recovery={...week,phase:'Herstel',targetLoad:300};return proposeWorkoutWeek({week:recovery,availabilityByDate:availability}).intensitySessions===0});
+test('Weinig beschikbaarheid: geen tijd overschrijding',()=>{const small=Object.fromEntries(dates.map(d=>[d,{available_minutes:30}]));return proposeWorkoutWeek({week,availabilityByDate:small}).totalMinutes===0});
+test('Intensieve opeenvolgende dagen geven waarschuwing',()=>{const r=evaluateWorkoutPlan({week,availabilityByDate:availability,sessions:[{date:dates[1],type:'threshold',durationMinutes:60},{date:dates[2],type:'vo2max',durationMinutes:60}]});return r.warnings.some(w=>w.includes('opeenvolgende'))});
+test('Een onhaalbaar load-doel geeft waarschuwing',()=>{const small=Object.fromEntries(dates.map(d=>[d,{available_minutes:30}]));return proposeWorkoutWeek({week,availabilityByDate:small}).warnings.some(w=>w.includes('onder het weekdoel'))});
+document.getElementById('summary').textContent=`${passed} geslaagd, ${failed} mislukt`;
+</script></body></html>
