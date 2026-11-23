@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="nl"><head><meta charset="UTF-8"><title>Les 38 – Weekbelasting tests</title>
+<style>body{font:15px system-ui;max-width:850px;margin:40px auto;padding:0 16px}h1{color:#207653}.pass{color:#207653}.fail{color:#b42318}li{margin:8px 0}</style></head>
+<body><h1>Les 38 – Weekbelasting tests</h1><ul id="results"></ul><h2 id="summary"></h2>
+<script type="module">
+import { analyzeStructuredWeek } from '../weekly-workout-load.js';
+const $ = id => document.getElementById(id);
+let passed=0,failed=0;
+function test(label, fn){const li=document.createElement('li');try{if(!fn())throw Error('Voorwaarde niet gehaald');passed++;li.className='pass';li.textContent='PASS – '+label}catch(e){failed++;li.className='fail';li.textContent='FAIL – '+label+': '+e.message} $('results').appendChild(li)}
+function throws(fn){try{fn();return false}catch{return true}}
+const monday='2026-11-30';
+const dates=['2026-11-30','2026-12-01','2026-12-02','2026-12-03','2026-12-04','2026-12-05','2026-12-06'];
+const cap=[0,90,120,90,0,60,180];
+const availability=Object.fromEntries(dates.map((date,i)=>[date,{available_minutes:cap[i]}]));
+const week={start:monday,end:dates[6],phase:'Opbouw',targetLoad:400};
+const sessions=[{date:dates[1],type:'vo2max',durationMinutes:60},{date:dates[2],type:'endurance',durationMinutes:120},{date:dates[3],type:'threshold',durationMinutes:60},{date:dates[6],type:'endurance',durationMinutes:180}];
+const run=(overrides={})=>analyzeStructuredWeek({week,sessions,availabilityByDate:availability,ftp:290,...overrides});
+const result=run();
+test('Plan is compleet bij geldige sessies',()=>result.complete);
+test('Vier sessies zijn doorgerekend',()=>result.rows.length===4);
+test('Weekdoel is 400',()=>result.targetLoad===400);
+test('Load is een positief getal',()=>result.estimatedTss>0);
+test('Load is gelijk aan de som van sessies',()=>Math.abs(result.estimatedTss-result.rows.reduce((sum,x)=>sum+x.estimatedTss,0))<0.0001);
+test('9 uur beschikbaar',()=>result.availableMinutes===540);
+test('7 uur gepland',()=>result.totalMinutes===420);
+test('Twee duurtrainingen',()=>result.breakdown.endurance.sessions===2);
+test('Een thresholdtraining',()=>result.breakdown.threshold.sessions===1);
+test('Een VO₂max-training',()=>result.breakdown.vo2max.sessions===1);
+test('Verdelingstotaal klopt',()=>Math.abs(Object.values(result.breakdown).reduce((sum,x)=>sum+x.tss,0)-result.estimatedTss)<0.0001);
+test('VO₂max bevat echte intervalminuten',()=>result.breakdown.vo2max.hardMinutes>0);
+test('Threshold bevat echte intervalminuten',()=>result.breakdown.threshold.hardMinutes>0);
+test('Voortgang wordt afgerond',()=>result.percent===Math.round(result.estimatedTss/400*100));
+test('Langer protocol wijzigt de belasting',()=>Math.abs(run({protocols:{[dates[1]]:'long'}}).estimatedTss-result.estimatedTss)>0.01);
+test('Training langer dan beschikbaar wordt geweigerd',()=>throws(()=>run({sessions:[{date:dates[1],type:'endurance',durationMinutes:120}]})));
+test('Dubbele datum wordt geweigerd',()=>throws(()=>run({sessions:[sessions[0],sessions[0]]})));
+test('Ongeldige FTP wordt geweigerd',()=>throws(()=>run({ftp:0})));
+test('Ongeldige startdag wordt geweigerd',()=>throws(()=>run({week:{...week,start:dates[1]}})));
+test('Ongeldig protocol wordt geweigerd',()=>throws(()=>run({protocols:{[dates[1]]:'unknown'}})));
+test('Aaneengesloten intensieve trainingen geven waarschuwing',()=>run({sessions:[{date:dates[1],type:'vo2max',durationMinutes:60},{date:dates[2],type:'threshold',durationMinutes:60}]}).warnings.some(x=>x.includes('opeenvolgende')));
+test('Herstelweek met intensief werk geeft onbekende week-TSS',()=>{const x=run({week:{...week,phase:'Herstel'}});return x.estimatedTss===null&&!x.complete&&x.unmodeled===2});
+test('Niet modelleerbare korte intensieve training geeft onbekend totaal',()=>{const x=run({sessions:[{date:dates[1],type:'threshold',durationMinutes:30}]});return x.estimatedTss===null&&x.percent===null&&x.rows[0].problem!==null});
+test('Leeg plan heeft 0 TSS en een waarschuwing',()=>{const x=run({sessions:[]});return x.estimatedTss===0&&x.warnings.some(a=>a.includes('Geen trainingssessies'))});
+test('Herstelduurrit is modelleerbaar',()=>run({week:{...week,phase:'Herstel'},sessions:[{date:dates[6],type:'endurance',durationMinutes:180}]}).complete);
+$('summary').textContent=`${passed} geslaagd, ${failed} mislukt`;
+</script></body></html>

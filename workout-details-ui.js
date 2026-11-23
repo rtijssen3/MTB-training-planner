@@ -85,7 +85,6 @@ function renderWorkout() {
     $('wd-np').textContent = `${Math.round(estimate.normalizedPowerWatts)} W`;
     $('wd-if').textContent = estimate.intensityFactor.toFixed(2);
     $('wd-tss').textContent = estimate.estimatedTss.toFixed(1);
-    $('wd-segment-load').textContent = String(workout.estimatedSegmentLoad);
     $('wd-summary').textContent =
       `${workout.title} · ${workout.durationMinutes} min · ${workout.hardMinutes} min intensief · fase: ${current.phase}.`;
     $('wd-export').value = toIntervalsWorkoutText(workout);
@@ -94,7 +93,7 @@ function renderWorkout() {
     $('wd-steps').replaceChildren();
     $('wd-profile').replaceChildren();
     $('wd-export').value = '';
-    for (const id of ['wd-np', 'wd-if', 'wd-tss', 'wd-segment-load']) $(id).textContent = '—';
+    for (const id of ['wd-np', 'wd-if', 'wd-tss']) $(id).textContent = '—';
     $('wd-summary').textContent = '';
     status(error.message, true);
   }
@@ -200,7 +199,6 @@ function init() {
         <div><span>Gemodelleerde NP</span><strong id="wd-np">—</strong></div>
         <div><span>Intensity Factor</span><strong id="wd-if">—</strong></div>
         <div><span>Geschatte power-TSS</span><strong id="wd-tss">—</strong></div>
-        <div><span>Oude segmentproxy</span><strong id="wd-segment-load">—</strong></div>
       </div>
       <div class="wd-table-wrap"><table class="wd-table"><thead><tr><th>Blok</th><th>Duur</th><th>FTP</th><th>Doelvermogen</th></tr></thead><tbody id="wd-steps"></tbody></table></div>
       <p id="wd-summary" class="wd-summary"></p>
