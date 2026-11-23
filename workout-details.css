@@ -1,0 +1,23 @@
+/* Les 36 – gestructureerde workouts */
+#workout-details { background:#fff; border:1px solid #dfe8e1; border-radius:16px; padding:24px; margin:22px 0; color:#23392c; }
+#workout-details [hidden] { display:none!important; }
+.wd-head { display:flex; justify-content:space-between; align-items:flex-start; gap:18px; }
+.wd-head h3 { font-size:21px; margin:3px 0 8px; color:#195a41; }
+.wd-head p:not(.pn-overline) { margin:0 0 16px; color:#66766b; font-size:14px; line-height:1.5; }
+#workout-details button { border:0; border-radius:9px; background:#207653; color:#fff; padding:11px 15px; cursor:pointer; font:inherit; }
+#wd-status { margin:12px 0; color:#607366; font-size:13px; }
+#wd-status.wd-error { color:#b42318; }
+.wd-controls { display:grid; grid-template-columns:2fr 1fr auto; gap:12px; align-items:end; padding:16px; background:#f5f9f6; border-radius:12px; margin:18px 0; }
+.wd-controls label { font-size:12px; font-weight:650; color:#476154; display:flex; flex-direction:column; gap:7px; }
+.wd-controls select,.wd-controls input { width:100%; padding:11px; border:1px solid #ccdad0; background:#fff; color:#24372b; border-radius:9px; font:inherit; box-sizing:border-box; }
+.wd-table-wrap { overflow-x:auto; }
+.wd-table { width:100%; border-collapse:collapse; }
+.wd-table th,.wd-table td { padding:11px 9px; text-align:left; border-bottom:1px solid #e8eee9; font-size:13px; }
+.wd-table th { color:#5b6d60; background:#f7faf8; }
+.wd-table td:last-child { font-weight:700; }
+.wd-summary { color:#195a41; font-weight:650; font-size:14px; }
+.wd-note { color:#66776c; font-size:12px; line-height:1.6; }
+.wd-export-label { display:block; margin:20px 0 9px; font-size:13px; font-weight:650; }
+#wd-export { width:100%; box-sizing:border-box; min-height:185px; padding:14px; border:1px solid #cbd8cf; border-radius:10px; font:12px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace; background:#f8fbf8; color:#253c2e; resize:vertical; }
+#wd-copy { margin-top:10px; }
+@media(max-width:700px){#workout-details{padding:16px}.wd-head{flex-direction:column}.wd-controls{grid-template-columns:1fr}.wd-table th,.wd-table td{padding:9px 6px}}
