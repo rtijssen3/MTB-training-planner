@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Les 37 – Workout load tests</title>
+  <style>body{font:16px system-ui;max-width:820px;margin:35px auto;padding:0 16px}h1,.pass{color:#207653}.fail{color:#b42318}li{margin:8px 0}#summary{margin-top:20px}</style>
+</head>
+<body>
+  <h1>Les 37 – NP en TSS-model</h1>
+  <ol id="results"></ol>
+  <h2 id="summary"></h2>
+  <script type="module">
+    import { estimateWorkoutTss, WORKOUT_PROTOCOLS, resolveWorkoutProtocol } from '../workout-load-model.js';
+    import { createStructuredWorkout, toIntervalsWorkoutText } from '../workout-details-model.js';
+    let passed=0,failed=0;
+    function test(name,fn){
+      const li=document.createElement('li');
+      try{if(!fn())throw new Error('Testvoorwaarde niet gehaald');passed++;li.className='pass';li.textContent=`PASS – ${name}`;}
+      catch(e){failed++;li.className='fail';li.textContent=`FAIL – ${name}: ${e.message}`;}
+      document.getElementById('results').appendChild(li);
+    }
+    function close(a,b,tolerance=0.001){return Math.abs(a-b)<=tolerance;}
+    function throws(fn){try{fn();return false;}catch{return true;}}
+    const make=(type,durationMinutes=60,protocol='classic',phase='Opbouw')=>
+      createStructuredWorkout({type,durationMinutes,ftp:290,protocol,phase});
+    const estimate=(w)=>estimateWorkoutTss(w);
+    const constant=(percentFtp,seconds=3600)=>({ftp:290,steps:[{label:'Steady',seconds,percentFtp,kind:'steady'}]});
+
+    test('60 min @ 100% FTP = circa 100 TSS',()=>close(estimate(constant(100)).estimatedTss,100));
+    test('60 min @ 50% FTP = circa 25 TSS',()=>close(estimate(constant(50)).estimatedTss,25));
+    test('30 min @ 100% FTP = circa 50 TSS',()=>close(estimate(constant(100,1800)).estimatedTss,50));
+    test('Gemodelleerde NP bij steady = doelvermogen',()=>close(estimate(constant(80)).normalizedPowerWatts,232));
+    test('Steady IF 0,80 bij 80% FTP',()=>close(estimate(constant(80)).intensityFactor,0.8));
+    test('Variabele workout levert andere NP dan gemiddelde wattage',()=>{
+      const e=estimate({ftp:290,steps:[{seconds:1800,percentFtp:50,kind:'easy'},{seconds:1800,percentFtp:110,kind:'work'}]});
+      return e.normalizedPowerWatts > e.avgWatts;
+    });
+    test('Workout bevat geen nul of negatieve tijd',()=>throws(()=>estimate({ftp:290,steps:[{seconds:0,percentFtp:75}]})));
+    test('FTP 0 wordt geweigerd',()=>throws(()=>estimate({ftp:0,steps:[{seconds:3600,percentFtp:75}]})));
+    test('Workouts met negatieve vermogensdoelen worden geweigerd',()=>throws(()=>estimate({ftp:290,steps:[{seconds:3600,percentFtp:-1}]})));
+    test('Onbekend protocol wordt geweigerd',()=>throws(()=>resolveWorkoutProtocol('vo2max','unknown')));
+    test('Duurtraining heeft één protocol',()=>WORKOUT_PROTOCOLS.endurance.length===1);
+    test('Threshold heeft twee protocollen',()=>WORKOUT_PROTOCOLS.threshold.length===2);
+    test('VO₂max heeft twee protocollen',()=>WORKOUT_PROTOCOLS.vo2max.length===2);
+    test('Threshold 3x8 heeft 3 intervallen',()=>make('threshold').steps.filter(s=>s.kind==='work').length===3);
+    test('Threshold 2x12 heeft 2 intervallen',()=>make('threshold',60,'long').steps.filter(s=>s.kind==='work').length===2);
+    test('VO₂max 5x3 heeft 5 intervallen',()=>make('vo2max').steps.filter(s=>s.kind==='work').length===5);
+    test('VO₂max 4x4 heeft 4 intervallen',()=>make('vo2max',60,'long').steps.filter(s=>s.kind==='work').length===4);
+    test('4x4 werkt op 110% FTP',()=>make('vo2max',60,'long').steps.filter(s=>s.kind==='work').every(s=>s.percentFtp===110));
+    test('Elk protocol vult precies sessieduur',()=>['endurance','threshold','vo2max'].every(t=>
+      WORKOUT_PROTOCOLS[t].every(p=>make(t,60,p.id).steps.reduce((n,s)=>n+s.seconds,0)===3600)));
+    test('Te korte 2x12 wordt geweigerd',()=>throws(()=>make('threshold',45,'long')));
+    test('Intensieve workout geweigerd in herstelweek',()=>throws(()=>make('vo2max',60,'classic','Herstel')));
+    test('Herstelduurrit is toegestaan',()=>make('endurance',60,'classic','Herstel').steps.some(s=>s.percentFtp===60));
+    test('TSS schatting is positief voor 60 min VO₂max',()=>estimate(make('vo2max')).estimatedTss>0);
+    test('Legacy segmentproxy blijft beschikbaar',()=>make('threshold').estimatedSegmentLoad>0);
+    test('Exportsyntaxis heeft FTP percentages',()=>toIntervalsWorkoutText(make('vo2max',60,'long')).includes('110%'));
+    document.getElementById('summary').textContent=`${passed} geslaagd, ${failed} mislukt`;
+  </script>
+</body></html>
