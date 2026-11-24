@@ -64,7 +64,7 @@
     </section>
 
     <section class="l39-page" id="l39-plan-page" hidden>
-      <div class="l39-page-heading"><div><p class="l39-kicker">STRATEGISCHE PLANNING</p><h1>Plan overview</h1><p class="l39-muted">Plan je mesocycle, bekijk de belasting per week en pas je eerstvolgende trainingen direct aan.</p></div><button id="l39-plan-save" class="l39-primary" type="button">Bewaar trainingsplan</button></div>
+      <div class="l39-page-heading"><div><p class="l39-kicker">STRATEGISCHE PLANNING</p><h1>Plan overview</h1><p class="l39-muted">Plan je mesocycle, bekijk de belasting per week en pas je eerstvolgende trainingen direct aan.</p></div></div>
       <p id="l39-plan-status" class="l39-status" role="status"></p>
       <section class="l39-panel l39-plan-config"><div class="l39-panel-top"><h2>Targets generator</h2><span class="l39-pill">RIDE · LOAD</span></div>
         <form id="l39-plan-form" class="l39-form-grid">
@@ -77,7 +77,7 @@
           <label>Herstelreductie (%)<input id="l39-plan-reduction" type="number" min="10" max="65" step="5" value="30"></label>
           <label>Herstel elke ... weken<input id="l39-plan-recovery-every" type="number" min="3" max="6" value="4"></label>
           <label>Plateau na (%)<input id="l39-plan-plateau" type="number" min="30" max="100" value="65"></label>
-          <button type="submit" class="l39-primary">Genereer concept</button>
+          <div class="l39-plan-form-actions"><button type="submit" class="l39-primary">Genereer concept</button><button id="l39-plan-save" type="button" class="l39-secondary">Bewaar mesocycle</button></div>
         </form><p class="l39-caption">De percentages zijn bewerkbare modelaannames, geen individueel trainingsadvies. Load = trainingsbelasting, niet uitsluitend intensiteit.</p></section>
       <section class="l39-panel"><div class="l39-panel-top"><div><h2>Training timeline</h2><p class="l39-caption">Klik op een week om de bijbehorende beschikbaarheid en workouts te bekijken.</p></div><div id="l39-timeline-summary" class="l39-timeline-summary">Geen plan opgeslagen</div></div><div id="l39-timeline" class="l39-timeline" tabindex="0"></div><div class="l39-legend"><span><i class="l39-dot base"></i>Base</span><span><i class="l39-dot build"></i>Build</span><span><i class="l39-dot peak"></i>Peak</span><span><i class="l39-dot recovery"></i>Recovery</span></div></section>
       <section class="l39-panel"><div class="l39-panel-top"><div><h2 id="l39-weeks-title">Beschikbaarheid & workouts</h2><p class="l39-caption">De huidige en volgende week. Klik op een week voor zeven schuifregelaars; klik op een training voor de workout.</p></div><div class="l39-actions"><button type="button" id="l39-current-weeks" class="l39-secondary">Huidige weken</button><button type="button" id="l39-propose" class="l39-primary">Trainingsvoorstel maken</button></div></div><div id="l39-two-weeks" class="l39-two-weeks"></div><p id="l39-availability-hint" class="l39-caption"></p></section>

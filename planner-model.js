@@ -106,6 +106,24 @@ export function migrateLegacyPlan(legacy) {
     raceDate:'',baseLoad:weeks[0].targetLoad,progression:0,recoveryReduction:30,recoveryEvery:4,plateau:65,weeks};
 }
 export function weekFor(plan,start) {return plan?.weeks?.find(w=>w.start===start)??null;}
+// Gebruik voor een reeds begonnen huidige week dezelfde indicatieve
+// mesocyclebelasting als de trainingsvoorstel-generator.
+// De bronweek blijft ongewijzigd; er wordt geen planweek ingevoegd.
+export function effectivePlanWeek(plan, start, currentWeekStart) {
+  const exact = weekFor(plan, start);
+  if (exact) return { week: exact, indicative: false };
+  if (!plan?.weeks?.length || start !== currentWeekStart) {
+    return { week: null, indicative: false };
+  }
+  const nextStart = dateKey(addDays(parseDate(start), 7));
+  const next = weekFor(plan, nextStart);
+  if (!next) return { week: null, indicative: false };
+  return {
+    week: { ...next, start, end: weekDates(start)[6] },
+    indicative: true
+  };
+}
+
 export function validSession(session,dates) {
   if(!session||!dates.includes(session.date))return false;
   return ['endurance','threshold','vo2max','group'].includes(session.type)&&Number.isInteger(session.durationMinutes)&&session.durationMinutes>=15&&session.durationMinutes<=360;
@@ -117,4 +135,30 @@ export function sumKnownLoads(items) {
   let total=0,missing=0;
   for(const item of items){if(typeof item.load==='number'&&Number.isFinite(item.load))total+=item.load;else missing++;}
   return {total:Math.round(total),missing};
+}
+
+// Trainingsvoorstellen: reeds verstreken dagen zijn niet meer beschikbaar,
+// maar vandaag en alle toekomstige dagen blijven planbaar.
+export function proposalAvailability(availabilityByDate, start, todayKey) {
+  const result = {};
+  for (const day of weekDates(start)) {
+    const entry = availabilityByDate?.[day];
+    const minutes = typeof entry === 'number' ? entry : entry?.available_minutes;
+    if (!Number.isInteger(minutes) || minutes < 0 || minutes > 1440) {
+      throw new Error(`Ongeldige beschikbaarheid voor ${day}.`);
+    }
+    result[day] = {
+      available_minutes: day < todayKey ? 0 : minutes
+    };
+  }
+  return result;
+}
+
+// Houd voltooide kalenderdagen intact. De voorgestelde sessies vervangen
+// uitsluitend de nog komende dagen in dezelfde week.
+export function mergeFutureSessions(existing, suggested, todayKey) {
+  return [
+    ...existing.filter(session => session.date < todayKey),
+    ...suggested.filter(session => session.date >= todayKey)
+  ].sort((a, b) => a.date.localeCompare(b.date));
 }

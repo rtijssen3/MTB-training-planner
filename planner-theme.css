@@ -33,3 +33,8 @@ html{background:var(--bg)}body.l39-body{margin:0!important;background:var(--bg)!
 @media(max-width:1080px){.l39-cal-week .l39-week-phase{margin-left:115px}}
 
 .l39-week-card-head{cursor:pointer}.l39-week-card-head:hover{background:#374057}.l39-week-card-head:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+
+/* Mesocycle-acties direct onder elkaar, na de invoervelden. */
+.l39-plan-form-actions{display:flex;flex-direction:column;align-items:stretch;gap:8px;grid-column:1/-1;max-width:260px}
+.l39-plan-form-actions button{min-height:40px}
+@media(max-width:540px){.l39-plan-form-actions{max-width:none}}
