@@ -1,0 +1,42 @@
+<!DOCTYPE html><html lang="nl"><head><meta charset="UTF-8"><title>Les 39 tests</title><style>body{font:16px system-ui;background:#191a25;color:#eef;padding:25px;max-width:900px;margin:auto}.pass{color:#77dfa5}.fail{color:#ff9191}pre{white-space:pre-wrap}</style></head><body><h1>Les 39 – Modeltests</h1><div id="result"></div><h2 id="summary"></h2><script type="module">
+import {dateKey,parseDate,addDays,monday,weekDates,weekStartOf,weekNumber,monthWeeks,intervalChunks,createMesocycle,migrateLegacyPlan,weekFor,validSession,typeLabel,sumKnownLoads} from '../planner-model.js';
+let success=0,failure=0;const output=document.querySelector('#result');
+function test(name,fn){const p=document.createElement('p');try{fn();success++;p.className='pass';p.textContent='PASS – '+name;}catch(e){failure++;p.className='fail';p.textContent='FAIL – '+name+' – '+e.message;}output.appendChild(p)}
+function eq(a,b){if(JSON.stringify(a)!==JSON.stringify(b))throw new Error(`${JSON.stringify(a)} ≠ ${JSON.stringify(b)}`)}
+function throws(fn){let yes=false;try{fn()}catch{yes=true}eq(yes,true)}
+test('Nederlandse datum als YYYY-MM-DD',()=>eq(dateKey(new Date(2026,10,24)), '2026-11-24'));
+test('Ongeldige dag wordt geweigerd',()=>throws(()=>parseDate('2026-02-30')));
+test('Maandag van dinsdag 24 november',()=>eq(weekStartOf(new Date(2026,10,24)),'2026-11-23'));
+test('Week telt zeven dagen',()=>eq(weekDates('2026-11-23').length,7));
+test('Zondag is 29 november',()=>eq(weekDates('2026-11-23')[6],'2026-11-29'));
+test('Weekstart is altijd maandag',()=>throws(()=>weekDates('2026-11-24')));
+test('ISO week 48',()=>eq(weekNumber('2026-11-23'),48));
+test('ISO overgang jaar 2027',()=>eq(weekNumber('2027-01-04'),1));
+test('November heeft zes kalenderweekrijen',()=>eq(monthWeeks(2026,10).length,6));
+test('Kalender begint maandag 26 oktober',()=>eq(monthWeeks(2026,10)[0].start,'2026-10-26'));
+test('Kalender eindigt zondag 6 december',()=>eq(monthWeeks(2026,10).at(-1).end,'2026-12-06'));
+test('84 dagen worden in drie stukken gesplitst',()=>eq(intervalChunks('2026-08-24','2026-11-15').length,3));
+test('API-periode overschrijdt geen 28 dagen',()=>eq(intervalChunks('2026-11-01','2026-11-30')[0].newest,'2026-11-28'));
+test('Omkering van periode wordt afgewezen',()=>throws(()=>intervalChunks('2026-12-01','2026-11-30')));
+const plan=createMesocycle({name:'Test',start:'2026-11-30',weeks:15,baseLoad:185,progression:5,recoveryReduction:30,recoveryEvery:4,plateau:65,raceDate:'2027-03-14'});
+test('Mesocycle heeft vijftien weken',()=>eq(plan.weeks.length,15));
+test('Week 1 begint op maandag',()=>eq(plan.weeks[0].start,'2026-11-30'));
+test('Laatste week bevat de race',()=>eq(plan.weeks.at(-1).end,'2027-03-14'));
+test('Eerste fase is Base',()=>eq(plan.weeks[0].phase,'Base'));
+test('Latere fase bevat Build',()=>eq(plan.weeks.some(w=>w.phase==='Build'),true));
+test('Eindfase bevat Peak',()=>eq(plan.weeks.some(w=>w.phase==='Peak'),true));
+test('Vierde week is Recovery',()=>eq(plan.weeks[3].phase,'Recovery'));
+test('Recovery week heeft lagere load',()=>eq(plan.weeks[3].targetLoad<plan.weeks[2].targetLoad,true));
+test('Fasen hebben geplande load > 0',()=>eq(plan.weeks.every(w=>w.targetLoad>0),true));
+test('Een geselecteerde week wordt gevonden',()=>eq(weekFor(plan,'2026-11-30').targetLoad,185));
+test('Onbekende week is null',()=>eq(weekFor(plan,'2026-01-01'),null));
+test('Zeer hoge opbouw wordt geweigerd',()=>throws(()=>createMesocycle({start:'2026-11-30',weeks:12,baseLoad:200,progression:30})));
+test('Vóór november beginnend plan wordt niet verzonnen',()=>throws(()=>createMesocycle({start:'2026-11-24',weeks:12,baseLoad:200})));
+test('Legacy week in Recovery gemigreerd',()=>eq(migrateLegacyPlan({weeks:[{start:'2026-11-30',end:'2026-12-06',phase:'Herstel',targetLoad:100}]}).weeks[0].phase,'Recovery'));
+test('Duurtraining is geldige sessie',()=>eq(validSession({date:'2026-11-24',type:'endurance',durationMinutes:60},weekDates('2026-11-23')),true));
+test('Onbekende training wordt geweigerd',()=>eq(validSession({date:'2026-11-24',type:'sprint',durationMinutes:60},weekDates('2026-11-23')),false));
+test('Type label VO2max',()=>eq(typeLabel('vo2max'),'VO₂max'));
+test('Onbekende load telt niet als nul',()=>eq(sumKnownLoads([{load:50},{load:null},{load:70}]),{total:120,missing:1}));
+document.querySelector('#summary').textContent=`${success} geslaagd · ${failure} mislukt`;
+window.__tests={success,failure};
+</script></body></html>
