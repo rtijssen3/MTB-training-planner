@@ -4,7 +4,7 @@ Dutch cycling planner for XCO, XCM, road and gravel. Vanilla JavaScript + Vite; 
 ## Local development
 Node 22, npm:
 ```sh
-npm install
+npm ci
 npm run dev
 npm test
 npm run build
