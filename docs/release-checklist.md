@@ -1,9 +1,7 @@
 # v1.0 release acceptance
-- [ ] GitHub Actions: unit tests, production build, isolated Chromium, desktop WebKit and iPhone-profile browser tests, plus npm audit and locked npm ci installation.
-- [ ] Real-account login/logout; reload and theme; standard availability and weekly overrides persist across reload.
-- [ ] Real-account plan creation, both week proposals, fixed group ride, manual workout on zero availability; calendar summary and TSS.
-- [ ] Verify migration 007 and cloud sync from two browser profiles; download backup first; test conflicts with disposable data.
-- [ ] Verify deployed intervals-read test connection and one explicitly approved future workout export; compare duration/intervals with preview. No automated real writes.
-- [ ] Review mobile layout and Safari.
-- [ ] Confirm GitHub Pages workflow builds dist/ before publishing; preserve current main until approval.
-- [ ] Record version and tag only after all checks pass.
+- [x] RC2 automatic validation: 164/164 unit tests, 12/12 isolated Chromium, desktop WebKit and iPhone-profile browser tests, successful locked npm ci, zero npm audit vulnerabilities, production build. [CI run](https://github.com/rtijssen3/MTB-training-planner/actions/runs/45658578645).
+- [x] User confirmed three live acceptance checks: Supabase availability and planner persistence/synchronization, Intervals.icu workout export, and mobile operation/layout.
+- [x] User explicitly approved publishing v1.0 to GitHub Pages.
+- [ ] Final version commit validation and Pages deployment. Verify the public site and v1.0.0 tag after deploy.
+- Manual testing is user-reported, not independently performed against the real account by CI.
+- Existing Supabase migrations and edge function configuration are not modified by this release.

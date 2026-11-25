@@ -1,6 +1,9 @@
 name: Build and publish Pages
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['package.json']
 permissions:
   contents: read
   pages: write
@@ -36,3 +39,24 @@ jobs:
       - name: Deploy
         id: deployment
         uses: actions/deploy-pages@v4
+  tag:
+    if: github.ref == 'refs/heads/main'
+    needs: deploy
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Tag published version
+        shell: bash
+        run: |
+          version="v$(node -p "require('./package.json').version")"
+          if git ls-remote --exit-code --tags origin "refs/tags/$version" >/dev/null; then
+            git fetch origin "refs/tags/$version:refs/tags/$version"
+            test "$(git rev-list -n 1 "$version")" = "$(git rev-parse HEAD)" || { echo "Version tag points to a different commit"; exit 1; }
+          else
+            git tag "$version"
+            git push origin "refs/tags/$version"
+          fi
