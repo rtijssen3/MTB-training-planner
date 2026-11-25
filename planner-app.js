@@ -1,4 +1,5 @@
-import {priorities,analyzeExposure,qualityOrder,skillWorkout,proposeSkillWeek} from './src/engine/friel.js';
+import {normalizePlannerAvailability,isGroupRide,fixedGroupDates,refreshFocus} from './src/core/planner-adapters.js';
+import {priorities,analyzeExposure,recalculateExposure,qualityOrder,skillWorkout,proposeSkillWeek} from './src/engine/friel.js';
 import { raceWeekCount } from './src/engine/event-plan.js';
 // Les 39 – geïntegreerde gebruikersinterface voor bestaande Supabase- en workoutmodellen.
 // Trainingsplannen en workoutconcepten blijven lokaal; uitgevoerde activiteiten komen uit Intervals.icu.
@@ -24,7 +25,7 @@ const num=n=>Number.isFinite(n)?Math.round(n).toLocaleString('nl-NL'):'—';
 const prettyDate=key=>new Intl.DateTimeFormat('nl-NL',{day:'numeric',month:'short'}).format(parseDate(key));
 const monthLabel=(y,m)=>new Intl.DateTimeFormat('nl-NL',{month:'long',year:'numeric'}).format(new Date(y,m,1));
 const nowKey=()=>dateKey(today());
-const fixedLabel=value=>{const t=String(value||'').trim();return /groep|group|🚴|🚲/i.test(t)?'Groepsrit':t;};
+const fixedLabel=value=>{const t=String(value||'').trim();return isGroupRide(t)?'Groepsrit':t;};
 const PLAN_PREFIX='mtb-mesocycle:v2:';
 const WORKOUT_PREFIX='mtb-workout-draft:v1:';
 const localAvailabilityPrefix='mtb-availability-local:v1:';
@@ -100,12 +101,7 @@ async function availabilityForWeek(start,{force=false}={}){
   const overrides=localAvailability();const result={};
   for(const key of weekDates(start)){
     const raw=state.getEffective(key)||{};
-    const value=Number(raw.available_minutes);
-    result[key]={available_minutes:Number.isFinite(value)&&value>=0?Math.round(value):null,
-      workout:String(raw.workout??raw.fixed_activity??raw.activity??'')};
-    if(Object.hasOwn(overrides,key)){
-      result[key].available_minutes=overrides[key];result[key].localOnly=true;
-    }
+    result[key]=normalizePlannerAvailability(raw,Object.hasOwn(overrides,key)?overrides[key]:undefined);
   }
   app.availability.set(start,result);return result;
 }
@@ -273,7 +269,7 @@ function renderCalendar(rows,activities,currentMonth,failed=false){
 
 // PLAN OVERVIEW ---------------------------------------------------
 function fillPlanForm(plan){
-  if(!plan){$('l39-plan-start').value=weekStartOf(today());$('l39-limiter').value='auto';return;}
+  if(!plan){$('l39-plan-start').value=weekStartOf(today());$('l39-discipline').value='xco';$('l39-limiter').value='auto';return;}
   $('l39-plan-name').value=plan.name||'Mijn trainingsplan';$('l39-plan-start').value=plan.start;
   $('l39-plan-race').value=plan.raceDate||'';$('l39-discipline').value=plan.discipline||'xco';$('l39-plan-weeks').value=plan.weeks.length;
   $('l39-plan-base').value=plan.baseLoad;$('l39-plan-growth').value=plan.progression;
@@ -282,14 +278,18 @@ function fillPlanForm(plan){
 }
 function renderSkillPanel(){
   const host=$('l39-skill-priorities');host.replaceChildren();
-  if(!app.plan){host.textContent='Genereer eerst een trainingsplan.';$('l39-limiter-status').textContent='';return;}
   const {week}=effectivePlanWeek(app.plan,weekWindowStart(),weekStartOf(today()));
-  for(const p of priorities(app.plan.discipline,week?.phase||app.plan.weeks[0].phase,app.plan.limiter,app.plan.limiterAnalysis)){
+  for(const p of priorities($('l39-discipline').value,week?.phase||app.plan?.weeks[0]?.phase||'Base',$('l39-limiter').value,app.plan?.limiterAnalysis)){
     const row=add(host,'div','skill-row');add(row,'span','',p.label+(p.focus?' · focus':''));
     const meter=add(row,'meter');meter.min=0;meter.max=5;meter.value=p.score;meter.setAttribute('aria-label',p.label);add(row,'strong','',p.score+'/5');
   }
-  const a=app.plan.limiterAnalysis;
+  const a=app.plan?.limiterAnalysis;
   $('l39-limiter-status').textContent=a?('Vermogensgegevens: '+a.covered+'/'+a.denominator+' ritten. '+(a.candidate?'Mogelijke blootstellingslacune: '+a.candidate+'.':'Geen voldoende onderbouwde automatische focus.')+' Kracht en techniek niet afleidbaar uit zones.'):'Nog geen historieanalyse; kies desgewenst handmatig.';
+}
+function updateSkillFocus(){
+  const next=refreshFocus(app.plan,{discipline:$('l39-discipline').value,limiter:$('l39-limiter').value},recalculateExposure);
+  if(next!==app.plan){app.plan=next;app.planDirty=true;status('l39-plan-status','Trainingsfocus aangepast. Bewaar mesocycle om op te slaan; bestaande workouts blijven ongewijzigd.','good');}
+  renderSkillPanel();
 }
 async function analyzeLimiterHistory(){
   if(!app.userId||!app.plan)return;
@@ -406,13 +406,14 @@ async function proposeWeek(){
         continue;
       }
       if(indicative)warnings.push(`Week ${weekNumber(weekStart)}: indicatief doel uit de eerste mesocycleweek.`);
-      const availability=await availabilityForWeek(weekStart);
+      const availability=await availabilityForWeek(weekStart,{force:true});
       const usable=proposalAvailability(availability,weekStart,now);
       if(app.plan.raceDate){for(const day of Object.keys(usable))if(day>=app.plan.raceDate)usable[day].available_minutes=0;}
       let remainingTarget=week.targetLoad;
       let completedLoad=0;
       let occupiedDates=[];
       let stimulus=null;
+      let groupOnly=false;
 
       if(weekStart===currentWeek){
         // Een reeds voltooide training telt mee voor het weekdoel.
@@ -427,13 +428,13 @@ async function proposeWeek(){
           warnings.push(`Week ${weekNumber(weekStart)}: ${remark}`);
         }
         if(progress.missingLoadCount){
-          warnings.push(`Week ${weekNumber(weekStart)}: ${progress.missingLoadCount} uitgevoerde activiteit(en) zonder trainingsload. Restdoel onbekend; geen automatisch voorstel voor deze week.`);
-          continue;
+          warnings.push(`Week ${weekNumber(weekStart)}: ${progress.missingLoadCount} uitgevoerde activiteit(en) zonder trainingsload. Restdoel onbekend; alleen vaste groepsritten worden voorgesteld.`);
+          groupOnly=true;
         }
-        remainingTarget=progress.remainingLoad;
+        remainingTarget=progress.remainingLoad??0;
         if(progress.targetReached){
-          warnings.push(`Week ${weekNumber(weekStart)}: het weekdoel is met ${completedLoad} load al bereikt. Geen extra training voorgesteld.`);
-          continue;
+          warnings.push(`Week ${weekNumber(weekStart)}: het weekdoel is met ${completedLoad} load al bereikt. Alleen vaste groepsritten worden behouden.`);
+          groupOnly=true;
         }
         // Bescherm dagen waarop deze week al een training is uitgevoerd.
         for(const day of occupiedDates){
@@ -455,13 +456,14 @@ async function proposeWeek(){
           remainingTarget=Math.min(remainingTarget,proposedRemaining);
           warnings.push(`Week ${weekNumber(weekStart)}: ${guidance.reason}`);
           if(remainingTarget<=0){
-            warnings.push(`Week ${weekNumber(weekStart)}: reeds uitgevoerde belasting bereikt de voorzichtige voorstelgrens; geen nieuwe automatische trainingen.`);
-            continue;
+            warnings.push(`Week ${weekNumber(weekStart)}: voorstelgrens bereikt; alleen vaste groepsritten worden behouden.`);
+            groupOnly=true;
           }
         }
       }
 
-      if(!Object.values(usable).some(v=>v.available_minutes>=45)){
+      const groups=fixedGroupDates(availability,weekDates(weekStart)).filter(d=>usable[d]?.available_minutes>=15);
+      if(!groups.length&&!Object.values(usable).some(v=>v.available_minutes>=45)&&!groupOnly){
         warnings.push(`Week ${weekNumber(weekStart)} heeft geen resterende beschikbare momenten van minstens 45 minuten.`);
         continue;
       }
@@ -473,17 +475,17 @@ async function proposeWeek(){
       if(stimulus?.classes?.some(c=>c.indicators.includes('repeated-vo2-like-intervals-observed')))seen.push('vo2max');
       if(stimulus?.classes?.some(c=>c.indicators.includes('repeated-threshold-like-intervals-observed')))seen.push('threshold');
       const estimates=new Map();
-      const result=proposeSkillWeek({dates:weekDates(weekStart),availability:usable,target:remainingTarget,
-        maxQuality:phasePolicy.maxQualitySessions,blocked:phasePolicy.blockedQualityDates,
+      const result=proposeSkillWeek({dates:weekDates(weekStart),availability:usable,target:groupOnly?0:remainingTarget,
+        maxQuality:groupOnly?0:phasePolicy.maxQualitySessions,blocked:phasePolicy.blockedQualityDates,
         qualityTypes:qualityOrder(app.plan.discipline,week.phase,app.plan.limiter,app.plan.limiterAnalysis,seen),phase:week.phase,
-        fixed:weekDates(weekStart).filter(d=>fixedLabel(availability[d]?.workout)==='Groepsrit'),
+        fixed:groups,
         loadFor:(type,durationMinutes)=>{const k=type+':'+durationMinutes;if(!estimates.has(k))estimates.set(k,workoutInfo({type,durationMinutes},week).load??NaN);return estimates.get(k);}
       });
       if(result.unknownFixed)warnings.push('Groepsrit behouden; onbekende load en herstel conservatief behandeld.');
       const suggestions=result.sessions
         .filter(s=>s.date>=now && !occupiedDates.includes(s.date))
         .map(s=>({date:s.date,type:s.type,durationMinutes:s.durationMinutes,protocol:'classic',group:!!s.group}));
-      if(!suggestions.length){
+      if(!suggestions.length&&!groupOnly){
         warnings.push(`Week ${weekNumber(weekStart)}: geen passende trainingen mogelijk.`);
         continue;
       }
@@ -500,7 +502,7 @@ async function proposeWeek(){
       return;
     }
     const replacing=prepared.filter(item=>item.existing.some(s=>s.date>=now));
-    const preview=prepared.map(item=>`Week ${weekNumber(item.start)}:\n`+item.suggestions.map(s=>`${s.date}: ${s.group?'Groepsrit':typeLabel(s.type)} · ${s.durationMinutes} min`).join('\n')).join('\n\n');
+    const preview=prepared.map(item=>`Week ${weekNumber(item.start)}:\n`+(item.suggestions.length?item.suggestions.map(s=>`${s.date}: ${s.group?'Groepsrit':typeLabel(s.type)} · ${s.durationMinutes} min`).join('\n'):'Geen aanvullende trainingen')).join('\n\n');
     if(!window.confirm(`${preview}\n\n${replacing.length?'Bestaande toekomstige trainingen worden vervangen. ':''}Voorstel bevestigen?`))return;
     for(const item of prepared)storeSessions(item.start,item.merged);
     const count=prepared.reduce((sum,item)=>sum+item.suggestions.length,0);
@@ -525,7 +527,7 @@ function generatePlan(event){
     if(data.raceDate)data.weeks=raceWeekCount(data.start,data.raceDate);
     if(Number(data.weeks)<8||Number(data.weeks)>24)throw Error('Kies 8–24 weken.');
     $('l39-plan-weeks').value=String(data.weeks);
-    const previous=app.plan;app.plan=createMesocycle(data);app.plan.limiter=$('l39-limiter').value;if(previous?.discipline===data.discipline)app.plan.limiterAnalysis=previous.limiterAnalysis;app.planDirty=true;app.focusedWeek=null;renderTimeline();renderTwoWeeks();
+    const previous=app.plan;app.plan=createMesocycle(data);app.plan.limiter=$('l39-limiter').value;if(previous?.limiterAnalysis)app.plan.limiterAnalysis=recalculateExposure(previous.limiterAnalysis,data.discipline);app.planDirty=true;app.focusedWeek=null;renderTimeline();renderTwoWeeks();
     status('l39-plan-status','Concept gegenereerd maar nog niet opgeslagen. Klik op Bewaar mesocycle.','good');
   }catch(e){status('l39-plan-status',e.message,'error')}
 }
@@ -626,12 +628,12 @@ async function openWorkout(date){
     const available=await availabilityForWeek(start);
     const capacity=available[date]?.available_minutes;
     if(capacity===null)throw new Error('Geen beschikbare minuten voor deze datum bekend.');
-    const s=getSession(date),phase=weekFor(app.plan,start);
+    const s=getSession(date),phase=effectivePlanWeek(app.plan,start,weekStartOf(today())).week;
     app.workoutModal={date,start,capacity,phase};
     $('l39-workout-title').textContent=`${prettyDate(date)} · Training aanpassen`;
     const fixed=fixedLabel(available[date]?.workout).toLowerCase();
-    $('l39-workout-type').value=s?.group?'group':s?.type||(fixed.includes('groep')?'group':'endurance');
-    $('l39-workout-duration').value=String(s?.durationMinutes||Math.max(15,Math.min(60,Math.floor(capacity/15)*15)));
+    $('l39-workout-type').value=s?.group||isGroupRide(fixed)?'group':s?.type||'endurance';
+    $('l39-workout-duration').value=String(s?.group?s.durationMinutes:isGroupRide(fixed)?Math.min(360,Math.floor(capacity/15)*15):s?.durationMinutes||Math.max(15,Math.min(60,Math.floor(capacity/15)*15)));
     $('l39-workout-duration').max=String(Math.min(360,capacity));
     $('l39-workout-protocol').value=s?.protocol||'classic';
     $('l39-workout-capacity').textContent=`${fmtMinutes(capacity)} beschikbaar · ${phase?.phase??'Geen fase'}`;
@@ -731,7 +733,7 @@ function registerListeners(){
   $('l39-current-weeks').addEventListener('click',()=>{app.focusedWeek=null;renderTimeline();renderTwoWeeks()});
   $('l39-propose').addEventListener('click',proposeWeek);
   $('l39-analyze-limiters').addEventListener('click',analyzeLimiterHistory);
-  $('l39-limiter').addEventListener('change',()=>{if(app.plan){app.plan.limiter=$('l39-limiter').value;app.planDirty=true;renderSkillPanel();}});
+  for(const id of ['l39-discipline','l39-limiter'])$(id).addEventListener('change',updateSkillFocus);
   $('l39-week-form').addEventListener('submit',saveAvailability);
   $('l39-workout-form').addEventListener('submit',saveWorkout);
   $('l39-copy-workout').addEventListener('click',copyWorkout);

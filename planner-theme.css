@@ -53,3 +53,5 @@ html{background:var(--bg)}body.l39-body{margin:0!important;background:var(--bg)!
 [data-theme=light] .l39-status.is-good{color:#226e40}
 
 .skill-row{display:grid;grid-template-columns:minmax(120px,1fr) minmax(70px,1fr) 40px;gap:12px;align-items:center;padding:6px 0;font-size:13px}.skill-row meter{width:100%;accent-color:var(--accent)}.skill-row strong{text-align:right;color:var(--muted)}
+
+.skill-layout{display:grid;grid-template-columns:minmax(190px,250px) minmax(0,1fr);gap:24px;align-items:start}.skill-controls{display:flex;flex-direction:column;gap:12px}.skill-controls label{display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--muted);font-weight:700}.skill-controls select{width:100%}@media(max-width:650px){.skill-layout{grid-template-columns:1fr;gap:12px}}

@@ -13,10 +13,7 @@ export function priorities(discipline,phase,limiter='auto',analysis=null){
 export function analyzeExposure(activities,discipline,expected=activities.length){
  const totals={aerobic:0,muscular:0,anaerobic:0,power:0};let covered=0;
  for(const a of activities){const z=a.zMinutes;if(a.zonesStatus!=='complete'||!z||!Array.from({length:7},(_,i)=>z['Z'+(i+1)]).every(x=>Number.isFinite(x)&&x>=0))continue;if(Object.values(z).reduce((s,x)=>s+x,0)<=0)continue;covered++;totals.aerobic+=z.Z2;totals.muscular+=z.Z3+z.Z4;totals.anaerobic+=z.Z5+z.Z6;totals.power+=z.Z7;}
- const denominator=Math.max(activities.length,expected),coverage=denominator?covered/denominator:0,total=Object.values(totals).reduce((s,x)=>s+x,0);
- const ref={xco:[.70,.20,.08,.02],xcm:[.78,.17,.04,.01],road:[.72,.20,.06,.02],gravel:[.80,.15,.04,.01]}[discipline]||[.70,.20,.08,.02];
- const rank=Object.keys(totals).map((skill,i)=>({skill,ratio:total?totals[skill]/total/ref[i]:Infinity})).sort((a,b)=>a.ratio-b.ratio);
- return {candidate:covered>=6&&coverage>=.7&&total>=180&&rank[0].ratio<.7?rank[0].skill:null,covered,denominator,minutes:totals};
+ return recalculateExposure({covered,denominator:Math.max(activities.length,expected),minutes:totals},discipline);
 }
 
 export function qualityOrder(discipline,phase,limiter,analysis,seen=[]){
@@ -49,4 +46,14 @@ export function proposeSkillWeek({dates,availability,target,maxQuality=2,blocked
  for(const i of [6,2,5,1,3,0,4]){if(slots.size>=6||slots.has(i)||cap(dates[i])<45)continue;if(groups&&used>=target*.65)break;const type=phase==='Base'&&!Array.from(slots.values()).some(s=>s.type==='skills')&&i!==6?'skills':'endurance';put(i,type,45);}
  for(let pass=0;pass<150;pass++){let changed=false;for(const i of [6,2,5,1,3,0,4]){const s=slots.get(i);if(!s||s.group||s.type!=='endurance'||s.durationMinutes+15>cap(s.date))continue;const next=s.durationMinutes+15,delta=loadFor(s.type,next)-loadFor(s.type,s.durationMinutes);if(Number.isFinite(delta)&&delta>=0&&used+delta<=target*(groups?.65:1)+.01){s.durationMinutes=next;used+=delta;changed=true;break;}}if(!changed)break;}
  return {sessions:[...slots.values()].sort((a,b)=>a.date.localeCompare(b.date)),estimatedKnownLoad:used,unknownFixed:groups};
+}
+
+export function recalculateExposure(analysis,discipline){
+ const {covered,denominator,minutes}=analysis;
+ const keys=['aerobic','muscular','anaerobic','power'];
+ const valid=keys.every(k=>Number.isFinite(minutes?.[k])&&minutes[k]>=0);
+ const total=valid?keys.reduce((s,k)=>s+minutes[k],0):0;
+ const reference={xco:[.70,.20,.08,.02],xcm:[.78,.17,.04,.01],road:[.72,.20,.06,.02],gravel:[.80,.15,.04,.01]}[discipline]||[.70,.20,.08,.02];
+ const rank=keys.map((skill,i)=>({skill,ratio:total?minutes[skill]/total/reference[i]:Infinity})).sort((a,b)=>a.ratio-b.ratio);
+ return {...analysis,candidate:covered>=6&&denominator>0&&covered/denominator>=.7&&total>=180&&rank[0].ratio<.7?rank[0].skill:null};
 }
