@@ -24,14 +24,16 @@ export function qualityOrder(discipline,phase,limiter,analysis,seen=[]){
 }
 
 export function skillWorkout({type,durationMinutes,ftp,phase='Opbouw'}){
- const specs={force:[4,180,75,180,55,'Krachtgericht: zittend, 60–70 rpm'],skills:[6,20,65,160,60,'Hoge cadans, ontspannen'],anaerobic:[6,45,140,180,50,'Anaerobe herhaling'],power:[5,10,180,240,50,'Korte krachtige versnelling']};
+ const specs={force:[4,180,75,180,55,'Krachtgericht: zittend, 60–70 rpm'],skills:[6,20,70,160,60,'Hoge cadans, ontspannen'],anaerobic:[6,45,140,180,50,'Anaerobe herhaling'],power:[5,10,180,240,50,'Korte krachtige versnelling']};
  if(!specs[type]||!Number.isInteger(durationMinutes)||durationMinutes<45||durationMinutes>360||!Number.isFinite(ftp)||ftp<100||ftp>600)throw Error('Kies 45–360 minuten en geldige FTP.');
  if(phase==='Herstel'&&type!=='skills')throw Error('Geen nieuwe zware prikkel in herstelweek.');
- const [reps,work,pct,rest,rpct,label]=specs[type],steps=[];
+ const [reps,work,basePct,rest,baseRest,label]=specs[type],steps=[];
+ const pct=type==='skills'&&phase==='Herstel'?65:basePct;
+ const rpct=type==='skills'&&phase==='Herstel'?55:baseRest;
  const add=(label,seconds,percentFtp,kind)=>{if(seconds>0)steps.push({label,seconds,percentFtp,kind,watts:Math.round(ftp*percentFtp/100)});};
  add('Warming-up',720,55,'warmup');for(let i=0;i<reps;i++){add(label,work,pct,type==='skills'?'endurance':'work');if(i<reps-1)add('Herstel',rest,rpct,'recovery');}
  const extra=durationMinutes*60-480-steps.reduce((s,x)=>s+x.seconds,0);if(extra<0)throw Error('Te weinig tijd voor dit protocol.');
- add('Rustig duurwerk',extra,phase==='Herstel'?55:65,'endurance');add('Cooling-down',480,50,'cooldown');
+ add('Rustig duurwerk',extra,phase==='Herstel'?55:type==='skills'?60:65,'endurance');add('Cooling-down',480,50,'cooldown');
  return {type,title:LABELS[SKILLS.indexOf(MAP[type])],durationMinutes,ftp,phase,protocol:'classic',steps,hardMinutes:steps.filter(s=>s.kind==='work'&&s.percentFtp>100).reduce((s,x)=>s+x.seconds,0)/60};
 }
 

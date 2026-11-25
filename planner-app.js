@@ -1,3 +1,4 @@
+import {formatIntensityMinutes,summarizePlannedLoads,manualWorkoutValidation} from './src/core/workout-display.js';
 import {workoutText} from './src/workouts/export.js';
 import {createCloudSync} from './src/data/cloud-sync.js';
 import {readSnapshot} from './src/data/planner-snapshot.js';
@@ -64,8 +65,8 @@ function sessions(start){
 function storeSessions(start,items){localStorage.setItem(getWorkoutKey(start),JSON.stringify({version:1,start,sessions:items}));}
 function getSession(date){return sessions(weekStartOf(parseDate(date))).find(s=>s.date===date)||null}
 function weekSessionStats(start){const week=effectivePlanWeek(app.plan,start,weekStartOf(today())).week;const items=sessions(start);
-  const result=sumKnownLoads(items.map(s=>({load:workoutInfo(s,week).load})));
-  return {...result,items};
+  const loads=new Map(items.map(s=>[s.date,workoutInfo(s,week).load]));
+  return {...summarizePlannedLoads([...loads.values()],week?.targetLoad),items,loads};
 }
 function setTab(tab){
   if(!['dashboard','calendar','plan','settings'].includes(tab))tab='dashboard';
@@ -163,7 +164,7 @@ async function loadDashboard(){
     const completed=sumKnownLoads(finished.map(a=>({load:a.trainingLoad})));
     const planned=weekSessionStats(start);
     $('l39-week-done').textContent=num(completed.total);
-    $('l39-week-planned').textContent=planned.items.length?(planned.missing?'Onvolledig':num(planned.total)):'—';
+    $('l39-week-planned').textContent=planned.items.length?num(planned.total)+(planned.missing?' + ?':''):'—';
     const pct=week&&completed.missing===0?Math.round(completed.total/week.targetLoad*100):null;
     $('l39-week-percent').textContent=pct===null?'—':`${pct}%`;
     $('l39-progress-fill').style.width=`${Math.min(100,Math.max(0,pct??0))}%`;
@@ -233,7 +234,7 @@ function renderCalendar(rows,activities,currentMonth,failed=false){
     const total=sumKnownLoads(weekExecuted.map(a=>({load:a.trainingLoad})));
     add(summary,'small','',failed?'Uitgevoerd: niet beschikbaar':`Uitgevoerd: ${num(total.total)}${total.missing?'*':''}`);
     if(phase)add(summary,'em','',`Doel: ${phase.targetLoad}${indicative?' (indicatief)':''}`);
-    if(stat.items.length)add(summary,'small','',`Workouts: ${stat.missing?'load onbekend':num(stat.total)}`);
+    if(stat.items.length)add(summary,'small','',`Workouts: ${num(stat.total)} TSS${stat.missing?' + '+stat.missing+' onbekend':''}`);
     for(const day of row.days){
       const d=parseDate(day),dateCell=add(line,'div','l39-cal-day');
       if(day===nowKey())dateCell.classList.add('today');
@@ -349,11 +350,19 @@ function renderWeekCard(host,start,availability){
       session?(session.group?'Groepsrit':typeLabel(session.type)):
         (availability[key]?.workout?fixedLabel(availability[key].workout):key<nowKey()?'—':'+ Training'));
     button.type='button';button.dataset.action='workout';button.dataset.date=key;
+    if(session){
+      const load=info.loads.get(key);
+      add(day,'span','l39-session-load',`${fmtMinutes(session.durationMinutes)} · ${load==null?'TSS onbekend':num(load)+' TSS'}`);
+      if(Number.isFinite(mins)&&session.durationMinutes>mins)add(day,'small','l39-capacity-warning','Handmatig boven beschikbaarheid');
+    }
     if(key<nowKey())button.disabled=true;
   }
   const foot=add(container,'div','l39-week-footer');
   add(foot,'span','',`Beschikbaar: ${fmtMinutes(keys.reduce((s,k)=>s+(availability[k]?.available_minutes??0),0))}`);
-  add(foot,'span','',`Workouts: ${info.items.length?info.missing?'TSS onvolledig':num(info.total)+' TSS':'nog niet gepland'}`);
+  const totals=add(foot,'div','l39-week-load-summary');
+  add(totals,'strong','',`Workouts: ${num(info.total)} TSS${info.missing?' + '+info.missing+' onbekend':''}`);
+  if(info.delta!==null)add(totals,'small','',`${info.delta>0?'Nog '+num(info.delta):info.delta<0?num(-info.delta)+' boven doel':'Doel bereikt'}${info.delta!==0?' TSS':''} · alleen geplande TSS${info.missing?' (excl. onbekend)':''}`);
+  if(!info.items.length)add(totals,'small','','Nog geen workouts gepland');
 }
 async function proposeWeek(){
   if(!app.userId || app.proposing)return;
@@ -646,8 +655,8 @@ async function openWorkout(date){
     $('l39-workout-title').textContent=`${prettyDate(date)} · Training aanpassen`;
     const fixed=fixedLabel(available[date]?.workout).toLowerCase();
     $('l39-workout-type').value=s?.group||isGroupRide(fixed)?'group':s?.type||'endurance';
-    $('l39-workout-duration').value=String(s?.group?s.durationMinutes:isGroupRide(fixed)?Math.min(360,Math.floor(capacity/15)*15):s?.durationMinutes||Math.max(15,Math.min(60,Math.floor(capacity/15)*15)));
-    $('l39-workout-duration').max=String(Math.min(360,capacity));
+    $('l39-workout-duration').value=String(s?.durationMinutes|| (capacity<15?60:isGroupRide(fixed)?Math.min(360,Math.floor(capacity/15)*15):Math.max(15,Math.min(60,Math.floor(capacity/15)*15))));
+    $('l39-workout-duration').max='360';
     $('l39-workout-protocol').value=s?.protocol||'classic';
     $('l39-workout-level').value=String(s?.level||progressionLevel(app.plan,phase));
     $('l39-workout-capacity').textContent=`${fmtMinutes(capacity)} beschikbaar · ${phase?.phase??'Geen fase'}`;
@@ -677,12 +686,14 @@ function renderWorkoutPreview(){
   $('l39-workout-duration').disabled=type==='rest';
   try{
     const {s,info}=previewWorkoutResult();
+    const check=manualWorkoutValidation({type:s.type,durationMinutes:s.durationMinutes,capacity:app.workoutModal.capacity});
+    const warning=$('l39-workout-override');warning.hidden=!check.overCapacity;warning.textContent=check.overCapacity?'Deze training is langer dan je beschikbaarheid. Je kunt hem handmatig bewaren; de standaardweek blijft ongewijzigd.':'';
     if(s.type==='rest'){$('l39-workout-tss').textContent='0';$('l39-workout-hard').textContent='0';add(steps,'p','l39-caption','Rustdag: geen gestructureerde workout.');return}
     if(info.reason){
       $('l39-workout-tss').textContent='—';$('l39-workout-hard').textContent='—';
       add(steps,'p','l39-caption',info.reason);status('l39-workout-modal-status',info.reason);return;
     }
-    $('l39-workout-tss').textContent=num(info.load);$('l39-workout-hard').textContent=String(info.workout.hardMinutes);
+    $('l39-workout-tss').textContent=num(info.load);$('l39-workout-hard').textContent=formatIntensityMinutes(info.workout.hardMinutes);
     for(const step of info.workout.steps){
       const slot=add(host,'div','bar-slot');slot.style.flex=String(step.seconds);
       const bar=add(slot,'div',`bar ${step.kind}`);bar.style.setProperty('--bar-height',`${Math.max(8,step.percentFtp/200*100)}%`);
@@ -699,10 +710,10 @@ async function saveWorkout(event){
   const {date,start,capacity,phase}=app.workoutModal;
   const {s,info}=previewWorkoutResult();
   if(s.type!=='rest'){
-    if(!Number.isInteger(s.durationMinutes)||s.durationMinutes<15||s.durationMinutes>360||s.durationMinutes>capacity||s.durationMinutes%15!==0){
-      status('l39-workout-modal-status',`Gebruik stappen van 15 minuten, maximaal ${capacity} minuten beschikbaar.`,'error');return;
-    }
+    const check=manualWorkoutValidation({type:s.type,durationMinutes:s.durationMinutes,capacity});
+    if(!check.valid){status('l39-workout-modal-status','Gebruik 15–360 minuten in stappen van 15 minuten.','error');return;}
     if(s.type!=='group'&&info.reason){status('l39-workout-modal-status',info.reason,'error');return}
+    if(check.overCapacity&&!window.confirm(`Je hebt ${capacity} minuten beschikbaar, maar wilt ${s.durationMinutes} minuten trainen. Handmatig bewaren zonder de beschikbaarheid te wijzigen?`))return;
   }
   const all=sessions(start).filter(x=>x.date!==date);
   if(s.type!=='rest')all.push({...s,type:s.type==='group'?'endurance':s.type,group:s.type==='group'});

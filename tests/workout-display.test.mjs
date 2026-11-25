@@ -1,0 +1,12 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {formatIntensityMinutes,summarizePlannedLoads,manualWorkoutValidation} from '../src/core/workout-display.js';import {buildProgressiveWorkout} from '../src/workouts/progression.js';import {skillWorkout} from '../src/engine/friel.js';import {estimateWorkoutTss} from '../workout-load-model.js';
+test("intensity rounded one decimal",()=>assert.ok((()=>formatIntensityMinutes(0.833333333333)==='0,8')()));
+test("intensity whole number",()=>assert.ok((()=>formatIntensityMinutes(15)==='15')()));
+test("known partial total and gap",()=>assert.ok((()=>{const s=summarizePlannedLoads([45.2,80.3,null],200);return s.total===126&&s.missing===1&&s.delta===74;})()));
+test("zero availability manual override",()=>assert.ok((()=>{const s=manualWorkoutValidation({durationMinutes:60,capacity:0,type:'endurance'});return s.valid&&s.overCapacity;})()));
+test("capacity not exceeded",()=>assert.ok((()=>!manualWorkoutValidation({durationMinutes:60,capacity:60,type:'endurance'}).overCapacity)()));
+test("bad duration rejected",()=>assert.ok((()=>!manualWorkoutValidation({durationMinutes:61,capacity:0,type:'endurance'}).valid)()));
+test("rest at zero valid",()=>assert.ok((()=>manualWorkoutValidation({durationMinutes:0,capacity:0,type:'rest'}).valid)()));
+test('cadence TSS is nondecreasing with level at equal duration in build and recovery',()=>{for(const phase of ['Opbouw','Herstel'])for(const durationMinutes of [45,60,90,180]){const loads=[1,2,3].map(level=>estimateWorkoutTss(buildProgressiveWorkout({type:'skills',level,durationMinutes,phase})).estimatedTss);assert.ok(loads[0]<=loads[1]&&loads[1]<=loads[2],JSON.stringify({phase,durationMinutes,loads}));}});
+test('classic cadence matches progressive level 2 profile load',()=>{const a=skillWorkout({type:'skills',durationMinutes:60,ftp:300});const b=buildProgressiveWorkout({type:'skills',durationMinutes:60,level:2});assert.equal(estimateWorkoutTss(a).estimatedTss,estimateWorkoutTss(b).estimatedTss);});
+test('cadence work is not classified as hard minutes',()=>assert.equal(buildProgressiveWorkout({type:'skills',durationMinutes:60,level:3}).hardMinutes,0));
+test('known total with unknown only reports zero known',()=>assert.deepEqual(summarizePlannedLoads([null],300),{total:0,missing:1,delta:300,knownCount:0}));

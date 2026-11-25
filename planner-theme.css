@@ -55,3 +55,5 @@ html{background:var(--bg)}body.l39-body{margin:0!important;background:var(--bg)!
 .skill-row{display:grid;grid-template-columns:minmax(120px,1fr) minmax(70px,1fr) 40px;gap:12px;align-items:center;padding:6px 0;font-size:13px}.skill-row meter{width:100%;accent-color:var(--accent)}.skill-row strong{text-align:right;color:var(--muted)}
 
 .skill-layout{display:grid;grid-template-columns:minmax(190px,250px) minmax(0,1fr);gap:24px;align-items:start}.skill-controls{display:flex;flex-direction:column;gap:12px}.skill-controls label{display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--muted);font-weight:700}.skill-controls select{width:100%}@media(max-width:650px){.skill-layout{grid-template-columns:1fr;gap:12px}}
+
+.l39-session-load{font-size:11px;font-weight:700;color:var(--text);font-variant-numeric:tabular-nums;text-align:center}.l39-week-load-summary{display:flex;flex-direction:column;gap:3px;text-align:right}.l39-week-load-summary strong{font-size:13px;color:var(--text)}.l39-week-load-summary small{font-size:11px;color:var(--muted)}.l39-capacity-warning{font-size:11px;color:var(--orange);text-align:center}.l39-week-footer{align-items:flex-start}
