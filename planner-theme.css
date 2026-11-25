@@ -38,3 +38,16 @@ html{background:var(--bg)}body.l39-body{margin:0!important;background:var(--bg)!
 .l39-plan-form-actions{display:flex;flex-direction:column;align-items:stretch;gap:8px;grid-column:1/-1;max-width:260px}
 .l39-plan-form-actions button{min-height:40px}
 @media(max-width:540px){.l39-plan-form-actions{max-width:none}}
+
+/* Light theme; preserve calendar grid and week summary column. */
+:root[data-theme=light]{--bg:#f2f5f9;--surface:#fff;--surface2:#f4f6fa;--surface3:#e7edf4;--line:#d2dae5;--text:#202b3b;--muted:#526173;--accent:#1769a6;--green:#268246;--blue:#217ac0;--orange:#a65b08;--red:#ab3347;color-scheme:light}
+[data-theme=light] .l39-body :is(input,select){background:#fff!important;border-color:var(--line)!important}
+[data-theme=light] .l39-body :is(.l39-tabs,.l39-cal-head,.l39-week-meta,.l39-cal-day,.l39-week-card,.l39-week-card-head,.l39-week-day,.l39-dialog,.l39-week-slider-row,.l39-upcoming-card,#availability-list>div){background:var(--surface2);border-color:var(--line);color:var(--text)}
+[data-theme=light] .l39-body :is(.l39-secondary,.l39-iconbutton,.l39-close,.l39-month-controls button,.l39-week-edit){background:#e7edf4!important;color:#254364!important;border-color:var(--line)!important}
+[data-theme=light] .l39-body .l39-primary{color:white!important}
+[data-theme=light] .l39-body .l39-tab{color:var(--muted)!important}
+[data-theme=light] .l39-body .l39-tab.active{background:#dbeafa!important;color:#174d7a!important}
+[data-theme=light] :is(.l39-brand,.l39-cal-day-header,.l39-cal-day-header strong,.l39-upcoming-date){color:var(--text)}
+[data-theme=light] .l39-phase-tag{color:#246e42}
+[data-theme=light] .l39-status.is-error{color:#a22235}
+[data-theme=light] .l39-status.is-good{color:#226e40}

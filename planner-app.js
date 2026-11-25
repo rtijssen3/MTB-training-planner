@@ -1,3 +1,4 @@
+import { raceWeekCount, eventQualityTypes } from './src/engine/event-plan.js';
 // Les 39 – geïntegreerde gebruikersinterface voor bestaande Supabase- en workoutmodellen.
 // Trainingsplannen en workoutconcepten blijven lokaal; uitgevoerde activiteiten komen uit Intervals.icu.
 import { supabase } from './supabase-client.js';
@@ -273,7 +274,7 @@ function renderCalendar(rows,activities,currentMonth,failed=false){
 function fillPlanForm(plan){
   if(!plan){$('l39-plan-start').value=weekStartOf(today());return;}
   $('l39-plan-name').value=plan.name||'Mijn trainingsplan';$('l39-plan-start').value=plan.start;
-  $('l39-plan-race').value=plan.raceDate||'';$('l39-plan-weeks').value=plan.weeks.length;
+  $('l39-plan-race').value=plan.raceDate||'';$('l39-discipline').value=plan.discipline||'xco';$('l39-plan-weeks').value=plan.weeks.length;
   $('l39-plan-base').value=plan.baseLoad;$('l39-plan-growth').value=plan.progression;
   $('l39-plan-reduction').value=plan.recoveryReduction;$('l39-plan-recovery-every').value=plan.recoveryEvery;
   $('l39-plan-plateau').value=plan.plateau;
@@ -346,7 +347,7 @@ async function proposeWeek(){
   app.proposing=true;
   const button=$('l39-propose');button.disabled=true;
   try{
-    if(app.planDirty && window.confirm('Huidige mesocycle opslaan?'))savePlan();
+    if(app.planDirty){if(!window.confirm('Huidige mesocycle opslaan voordat je workouts genereert?'))return;savePlan();}
     const start=weekWindowStart();
     const second=dateKey(addDays(parseDate(start),7));
     const starts=[start,second];
@@ -380,6 +381,7 @@ async function proposeWeek(){
       if(indicative)warnings.push(`Week ${weekNumber(weekStart)}: indicatief doel uit de eerste mesocycleweek.`);
       const availability=await availabilityForWeek(weekStart);
       const usable=proposalAvailability(availability,weekStart,now);
+      if(app.plan.raceDate){for(const day of Object.keys(usable))if(day>=app.plan.raceDate)usable[day].available_minutes=0;}
       let remainingTarget=week.targetLoad;
       let completedLoad=0;
       let occupiedDates=[];
@@ -445,7 +447,7 @@ async function proposeWeek(){
         availabilityByDate:usable,
         maxQualitySessions:phasePolicy.maxQualitySessions,
         blockedQualityDates:phasePolicy.blockedQualityDates,
-        qualityTypes:phasePolicy.qualityTypes
+        qualityTypes:eventQualityTypes(app.plan.discipline,week.phase,stimulus?.qualityTypes) || phasePolicy.qualityTypes
       });
       const suggestions=result.sessions
         .filter(s=>s.date>=now && !occupiedDates.includes(s.date))
@@ -455,7 +457,7 @@ async function proposeWeek(){
         continue;
       }
       const existing=sessions(weekStart);
-      const preservedToday=existing.filter(s=>occupiedDates.includes(s.date));
+      const preservedToday=existing.filter(s=>s.date===now && occupiedDates.includes(s.date));
       prepared.push({start:weekStart,suggestions,existing,
         // Behoud reeds uitgevoerde dagen, inclusief vandaag.
         merged:[...mergeFutureSessions(existing,suggestions,now),...preservedToday]
@@ -467,7 +469,8 @@ async function proposeWeek(){
       return;
     }
     const replacing=prepared.filter(item=>item.existing.some(s=>s.date>=now));
-    if(replacing.length && !window.confirm(`Voor ${replacing.map(item=>'week '+weekNumber(item.start)).join(' en ')} bestaan al trainingsvoorstellen. Alleen de komende trainingen overschrijven?`))return;
+    const preview=prepared.map(item=>`Week ${weekNumber(item.start)}:\n`+item.suggestions.map(s=>`${s.date}: ${typeLabel(s.type)} · ${s.durationMinutes} min`).join('\n')).join('\n\n');
+    if(!window.confirm(`${preview}\n\n${replacing.length?'Bestaande toekomstige trainingen worden vervangen. ':''}Voorstel bevestigen?`))return;
     for(const item of prepared)storeSessions(item.start,item.merged);
     const count=prepared.reduce((sum,item)=>sum+item.suggestions.length,0);
     const current=prepared.find(item=>item.start===currentWeek);
@@ -487,7 +490,10 @@ function generatePlan(event){
     const data={name:$('l39-plan-name').value,start:$('l39-plan-start').value,weeks:$('l39-plan-weeks').value,
       baseLoad:$('l39-plan-base').value,progression:$('l39-plan-growth').value,
       recoveryReduction:$('l39-plan-reduction').value,recoveryEvery:$('l39-plan-recovery-every').value,
-      plateau:$('l39-plan-plateau').value,raceDate:$('l39-plan-race').value};
+      plateau:$('l39-plan-plateau').value,raceDate:$('l39-plan-race').value,discipline:$('l39-discipline').value};
+    if(data.raceDate)data.weeks=raceWeekCount(data.start,data.raceDate);
+    if(Number(data.weeks)<8||Number(data.weeks)>24)throw Error('Kies 8–24 weken.');
+    $('l39-plan-weeks').value=String(data.weeks);
     app.plan=createMesocycle(data);app.planDirty=true;app.focusedWeek=null;renderTimeline();renderTwoWeeks();
     status('l39-plan-status','Concept gegenereerd maar nog niet opgeslagen. Klik op Bewaar mesocycle.','good');
   }catch(e){status('l39-plan-status',e.message,'error')}
@@ -703,9 +709,7 @@ function registerListeners(){
   document.addEventListener('click',handleActions);
   $('l39-plan-race').addEventListener('change',()=>{
     try{const race=$('l39-plan-race').value,start=$('l39-plan-start').value;if(!race||!start)return;
-      const delta=(parseDate(race)-parseDate(start))/86400000;if(delta<0)throw new Error('Wedstrijd valt vóór startdatum.');
-      const weeks=Math.floor(delta/7)+1;if(weeks>26)throw new Error('Deze versie ondersteunt maximaal 26 weken.');
-      $('l39-plan-weeks').value=String(Math.max(4,weeks));
+      $('l39-plan-weeks').value=String(raceWeekCount(start,race));
     }catch(e){status('l39-plan-status',e.message,'error')}
   });
 }

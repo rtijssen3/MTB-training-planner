@@ -1,3 +1,4 @@
+import { raceAdjustedWeeks } from './src/engine/event-plan.js';
 // Les 39 – pure kalender- en periodiseringsfuncties.
 // Dit module schrijft niet naar Supabase of localStorage.
 export const WEEKDAYS = ['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'];
@@ -65,7 +66,7 @@ function whole(value,min,max,label) {
   if(!Number.isInteger(n)||n<min||n>max)throw new Error(`${label}: kies ${min}–${max}.`);
   return n;
 }
-export function createMesocycle({name,start,weeks,baseLoad,progression=5,recoveryReduction=30,recoveryEvery=4,plateau=65,raceDate=''}) {
+export function createMesocycle({name,start,weeks,baseLoad,progression=5,recoveryReduction=30,recoveryEvery=4,plateau=65,raceDate='',discipline='xco'}) {
   const first=parseDate(start);
   if(first.getDay()!==1)throw new Error('Startdatum moet een maandag zijn.');
   const count=whole(weeks,4,26,'Aantal weken');
@@ -96,7 +97,7 @@ export function createMesocycle({name,start,weeks,baseLoad,progression=5,recover
     stimulus+=load;
   }
   return {version:2,name:String(name||'Mijn trainingsplan').slice(0,80),sport:'Ride',start,dateEnd:weeksOut.at(-1).end,
-    raceDate:race,baseLoad:base,progression:growth,recoveryReduction:reduction,recoveryEvery:recoveryN,plateau:plateauValue,weeks:weeksOut};
+    raceDate:race,discipline,baseLoad:base,progression:growth,recoveryReduction:reduction,recoveryEvery:recoveryN,plateau:plateauValue,weeks:raceAdjustedWeeks(weeksOut,race)};
 }
 export function migrateLegacyPlan(legacy) {
   if(!legacy?.weeks?.length)return null;

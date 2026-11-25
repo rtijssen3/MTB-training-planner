@@ -29,7 +29,7 @@
   <section id="dashboard-section" hidden>
     <header class="l39-topbar">
       <div class="l39-brand"><span class="l39-brand-mark">◈</span><span>MTB <strong>TRAINING PLANNER</strong></span></div>
-      <div class="l39-top-actions">
+      <div class="l39-top-actions"><button type="button" class="l39-iconbutton" id="theme-toggle" aria-label="Wissel licht/donker" title="Wissel licht/donker">☀</button>
         <span id="user-email" class="l39-user-email"></span>
         <button class="l39-iconbutton" id="l39-settings-link" type="button" aria-label="Instellingen" title="Instellingen">⚙</button>
         <button id="logout-button" type="button" class="secondary l39-logout">Uitloggen</button>
@@ -71,7 +71,7 @@
           <label>Plannaam<input id="l39-plan-name" type="text" maxlength="80" value="MTB trainingsblok"></label>
           <label>Startdatum (maandag)<input id="l39-plan-start" type="date" required></label>
           <label>Doelwedstrijd (optioneel)<input id="l39-plan-race" type="date"></label>
-          <label>Weken<input id="l39-plan-weeks" type="number" min="4" max="26" value="12"></label>
+          <label>Discipline<select id="l39-discipline"><option value="xco">MTB XCO</option><option value="xcm">MTB XCM</option><option value="road">Racefiets</option><option value="gravel">Gravel</option></select></label><label>Weken<input id="l39-plan-weeks" type="number" min="8" max="24" value="12"></label>
           <label>Startbelasting / week<input id="l39-plan-base" type="number" min="1" max="3000" placeholder="Zelf invullen" required></label>
           <label>Opbouw / blok (%)<input id="l39-plan-growth" type="number" min="0" max="12" step="1" value="5"></label>
           <label>Herstelreductie (%)<input id="l39-plan-reduction" type="number" min="10" max="65" step="5" value="30"></label>
@@ -112,6 +112,7 @@
 </main>
 <script type="module" src="./app.js"></script>
 <script type="module" src="./planner-app.js"></script>
+<script type="module" src="./src/ui/theme.js"></script>
 <script type="module" src="./intervals-detail-test.js"></script>
 </body>
 </html>
