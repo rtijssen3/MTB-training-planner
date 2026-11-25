@@ -9,6 +9,7 @@ import { estimateWorkoutTss } from './workout-load-model.js';
 import { proposeWorkoutWeek } from './workout-plan-model.js';
 import { buildPrivacySafeReport } from './training-analysis-model.js';
 import { deriveAdaptiveWeekPolicy } from './adaptive-week-policy.js';
+import { assessPeriodizationLoad, historyWindow } from './periodization-policy.js';
 import {
   WEEKDAYS,dateKey,parseDate,addDays,monday,weekDates,weekStartOf,weekNumber,
   monthWeeks,intervalChunks,createMesocycle,migrateLegacyPlan,weekFor,effectivePlanWeek,typeLabel,sumKnownLoads,proposalAvailability,mergeFutureSessions,remainingWeekLoad
@@ -352,6 +353,16 @@ async function proposeWeek(){
     const warnings=[];
     const now=nowKey();
     const currentWeek=weekStartOf(today());
+    // De periode eindigt vóór de huidige week; zo gebruiken we geen halfgevulde
+    // weken voor een trend. Een mislukte historievraag blokkeert de planner niet.
+    let historicalActivities=null;
+    try {
+      const {oldest,newest}=historyWindow(currentWeek);
+      historicalActivities=await getActivitiesRange(oldest,newest);
+    } catch (historyError) {
+      warnings.push('Historische Load tijdelijk niet beschikbaar; geen vierweeksbegrenzing toegepast.');
+      console.warn('Periodiseringshistorie:',historyError);
+    }
 
     // Bereken beide weken voordat we iets in de lokale opslag schrijven.
     // Voor de huidige week tellen uitgevoerde activiteiten eerst mee.
@@ -397,6 +408,26 @@ async function proposeWeek(){
         // Bescherm dagen waarop deze week al een training is uitgevoerd.
         for(const day of occupiedDates){
           if(usable[day])usable[day].available_minutes=0;
+        }
+      }
+
+      // Historie toetst uitsluitend de automatisch voorgestelde belasting.
+      // Het door de gebruiker gekozen mesocycle-weekdoel wijzigen we NIET.
+      if(historicalActivities){
+        const guidance=assessPeriodizationLoad({
+          activities:historicalActivities, currentWeekStart:currentWeek,
+          weekTarget:week.targetLoad, phase:week.phase
+        });
+        if(guidance.status==='insufficient') {
+          warnings.push(`Week ${weekNumber(weekStart)}: ${guidance.reason} Geen automatische trendbegrenzing.`);
+        } else if(guidance.capApplied){
+          const proposedRemaining=Math.max(0,guidance.proposalTarget-completedLoad);
+          remainingTarget=Math.min(remainingTarget,proposedRemaining);
+          warnings.push(`Week ${weekNumber(weekStart)}: ${guidance.reason}`);
+          if(remainingTarget<=0){
+            warnings.push(`Week ${weekNumber(weekStart)}: reeds uitgevoerde belasting bereikt de voorzichtige voorstelgrens; geen nieuwe automatische trainingen.`);
+            continue;
+          }
         }
       }
 
