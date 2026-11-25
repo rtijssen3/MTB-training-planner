@@ -7,6 +7,7 @@ import { normalizeActivity } from './intervals-model.js';
 import { createStructuredWorkout, toIntervalsWorkoutText } from './workout-details-model.js';
 import { estimateWorkoutTss } from './workout-load-model.js';
 import { proposeWorkoutWeek } from './workout-plan-model.js';
+import { analyzeCompletedStimulus } from './training-stimulus-model.js';
 import {
   WEEKDAYS,dateKey,parseDate,addDays,monday,weekDates,weekStartOf,weekNumber,
   monthWeeks,intervalChunks,createMesocycle,migrateLegacyPlan,weekFor,effectivePlanWeek,typeLabel,sumKnownLoads,proposalAvailability,mergeFutureSessions,remainingWeekLoad
@@ -331,6 +332,7 @@ async function proposeWeek(){
       let remainingTarget=week.targetLoad;
       let completedLoad=0;
       let occupiedDates=[];
+      let stimulus=null;
 
       if(weekStart===currentWeek){
         // Een reeds voltooide training telt mee voor het weekdoel.
@@ -340,6 +342,13 @@ async function proposeWeek(){
         const progress=remainingWeekLoad(week.targetLoad,records,weekStart,now);
         completedLoad=progress.completedLoad;
         occupiedDates=progress.occupiedDates;
+        stimulus=analyzeCompletedStimulus(records,weekStart,now);
+        if(stimulus.qualityCount){
+          warnings.push(`Week ${weekNumber(weekStart)}: ${stimulus.qualityCount} reeds uitgevoerde kwaliteitsprikkel(s) herkend aan de activiteitstitel.`);
+        }
+        if(stimulus.unknownCount){
+          warnings.push(`Week ${weekNumber(weekStart)}: ${stimulus.unknownCount} activiteit(en) met onbekende intensiteit; maximaal één nieuwe intensieve training en geen intensieve training direct naast die activiteit.`);
+        }
         if(progress.missingLoadCount){
           warnings.push(`Week ${weekNumber(weekStart)}: ${progress.missingLoadCount} uitgevoerde activiteit(en) zonder trainingsload. Restdoel onbekend; geen automatisch voorstel voor deze week.`);
           continue;
@@ -361,7 +370,9 @@ async function proposeWeek(){
       }
       const result=proposeWorkoutWeek({
         week:{...week,targetLoad:Math.max(1,remainingTarget),phase:week.phase==='Recovery'?'Herstel':'Opbouw'},
-        availabilityByDate:usable
+        availabilityByDate:usable,
+        maxQualitySessions: stimulus ? stimulus.maxNewQuality : 2,
+        blockedQualityDates: stimulus ? stimulus.blockedQualityDates : []
       });
       const suggestions=result.sessions
         .filter(s=>s.date>=now && !occupiedDates.includes(s.date))

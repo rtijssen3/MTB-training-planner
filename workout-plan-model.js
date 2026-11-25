@@ -101,21 +101,28 @@ export function evaluateWorkoutPlan({ week, availabilityByDate, sessions }) {
     intensitySessions: intensityIndices.length, warnings };
 }
 
-export function proposeWorkoutWeek({ week, availabilityByDate }) {
+export function proposeWorkoutWeek({ week, availabilityByDate, maxQualitySessions = 2, blockedQualityDates = [] }) {
   const dates = checkWeek(week);
   const caps = dates.map(date => available(availabilityByDate, date));
   const isRecovery = week.phase === 'Herstel';
+  if (!Number.isInteger(maxQualitySessions) || maxQualitySessions < 0 || maxQualitySessions > 2) {
+    throw new Error('Ongeldig maximum voor intensieve trainingen.');
+  }
+  if (!Array.isArray(blockedQualityDates) || blockedQualityDates.some(date => !dates.includes(date))) {
+    throw new Error('Ongeldige herstelbeperking.');
+  }
+  const blocked = new Set(blockedQualityDates);
   const sessions = new Map();
 
   // Twee kwaliteitsprikkels in opbouwweken, bij voldoende ruimte.
   // Dinsdag en donderdag hebben voorkeur; nooit twee opeenvolgende dagen.
-  if (!isRecovery) {
+  if (!isRecovery && maxQualitySessions > 0) {
     const preferred = [1, 3, 2, 5, 0, 4, 6];
     const chosen = [];
     for (const index of preferred) {
-      if (caps[index] < 60 || chosen.some(other => Math.abs(other - index) < 2)) continue;
+      if (caps[index] < 60 || blocked.has(dates[index]) || chosen.some(other => Math.abs(other - index) < 2)) continue;
       chosen.push(index);
-      if (chosen.length === 2) break;
+      if (chosen.length === maxQualitySessions) break;
     }
     if (chosen[0] !== undefined) sessions.set(chosen[0], { date: dates[chosen[0]], type: 'vo2max', durationMinutes: 60 });
     if (chosen[1] !== undefined) sessions.set(chosen[1], { date: dates[chosen[1]], type: 'threshold', durationMinutes: 60 });

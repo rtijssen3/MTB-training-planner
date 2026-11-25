@@ -1,0 +1,15 @@
+<!doctype html><html lang="nl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Training analysis tests</title><style>body{font:16px system-ui;max-width:760px;margin:3rem auto;padding:1rem;background:#101b23;color:#e9f4f4}pre{white-space:pre-wrap} .ok{color:#7feaaf}.bad{color:#ffa9a9}</style></head><body><h1>Training analysis – browsertests</h1><pre id="out"></pre><script type="module">
+import {analyzePowerZones,analyzeDetectedIntervals,summarizeIntervalsPeriod} from '../training-analysis-model.js';
+const out=document.getElementById('out');let passed=0,failed=0;
+function test(name,fn){try{if(!fn())throw Error('verwacht ander resultaat');passed++;out.textContent+='✓ '+name+'\n';}catch(e){failed++;out.textContent+='✗ '+name+': '+e.message+'\n';}}
+const zones=[1,2,3,4,5,6,7].map((n,i)=>({id:'Z'+n,secs:60*(i+1)}));zones.push({id:'SS',secs:90});
+test('Seven zones complete',()=>analyzePowerZones(zones).status==='complete');
+test('Sweet Spot wordt niet opgeteld',()=>analyzePowerZones(zones).coveredSeconds===1680);
+test('S1 is Z1+Z2',()=>analyzePowerZones(zones).sSeconds.S1===180);
+test('S3 is Z5+Z6+Z7',()=>analyzePowerZones(zones).sSeconds.S3===1080);
+test('Ontbrekende zones niet volledig',()=>analyzePowerZones(zones.slice(0,3)).status==='partial');
+test('Missing intervals is missing',()=>analyzeDetectedIntervals(null).status==='missing');
+test('Two intervals',()=>analyzeDetectedIntervals([{moving_time:30},{moving_time:60}]).count===2);
+test('Missing load is unknown',()=>!summarizeIntervalsPeriod([{id:'a',icu_training_load:10},{id:'b'}]).load.complete);
+out.textContent+='\n'+passed+' geslaagd, '+failed+' mislukt';out.className=failed?'bad':'ok';
+</script></body></html>
