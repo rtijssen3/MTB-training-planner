@@ -10,6 +10,7 @@ import { proposeWorkoutWeek } from './workout-plan-model.js';
 import { buildPrivacySafeReport } from './training-analysis-model.js';
 import { deriveAdaptiveWeekPolicy } from './adaptive-week-policy.js';
 import { assessPeriodizationLoad, historyWindow } from './periodization-policy.js';
+import { derivePhaseWorkoutPolicy } from './phase-focus-policy.js';
 import {
   WEEKDAYS,dateKey,parseDate,addDays,monday,weekDates,weekStartOf,weekNumber,
   monthWeeks,intervalChunks,createMesocycle,migrateLegacyPlan,weekFor,effectivePlanWeek,typeLabel,sumKnownLoads,proposalAvailability,mergeFutureSessions,remainingWeekLoad
@@ -435,12 +436,16 @@ async function proposeWeek(){
         warnings.push(`Week ${weekNumber(weekStart)} heeft geen resterende beschikbare momenten van minstens 45 minuten.`);
         continue;
       }
+      // Combineer mesocyclefase en werkelijk uitgevoerde trainingsprikkels.
+      // De strengste begrenzing wint; wijzig het opgeslagen weekdoel niet.
+      const phasePolicy=derivePhaseWorkoutPolicy({week,adaptivePolicy:stimulus});
+      warnings.push(`Week ${weekNumber(weekStart)}: ${phasePolicy.remarks.join(' ')}`);
       const result=proposeWorkoutWeek({
         week:{...week,targetLoad:Math.max(1,remainingTarget),phase:week.phase==='Recovery'?'Herstel':'Opbouw'},
         availabilityByDate:usable,
-        maxQualitySessions: stimulus ? stimulus.maxNewQuality : 2,
-        blockedQualityDates: stimulus ? stimulus.blockedQualityDates : [],
-        qualityTypes: stimulus ? stimulus.qualityTypes : ['vo2max','threshold']
+        maxQualitySessions:phasePolicy.maxQualitySessions,
+        blockedQualityDates:phasePolicy.blockedQualityDates,
+        qualityTypes:phasePolicy.qualityTypes
       });
       const suggestions=result.sessions
         .filter(s=>s.date>=now && !occupiedDates.includes(s.date))
