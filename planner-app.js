@@ -2,7 +2,7 @@ import {workoutText} from './src/workouts/export.js';
 import {createCloudSync} from './src/data/cloud-sync.js';
 import {readSnapshot} from './src/data/planner-snapshot.js';
 import {normalizePlannerAvailability,isGroupRide,fixedGroupDates,refreshFocus} from './src/core/planner-adapters.js';
-import {priorities,analyzeExposure,recalculateExposure,qualityOrder,skillWorkout,proposeSkillWeek} from './src/engine/friel.js';
+import {priorities,analyzeExposure,recalculateExposure,qualityOrder,proposeSkillWeek} from './src/engine/friel.js';
 import { raceWeekCount } from './src/engine/event-plan.js';
 // Les 39 – geïntegreerde gebruikersinterface voor bestaande Supabase- en workoutmodellen.
 // Trainingsplannen en workoutconcepten blijven lokaal; uitgevoerde activiteiten komen uit Intervals.icu.
@@ -10,8 +10,8 @@ import { supabase } from './supabase-client.js';
 import { initializeAvailability } from './availability-service.js';
 import { fetchIntervalsActivities, fetchIntervalsWellness, testIntervalsConnection, exportIntervalsWorkout } from './intervals-api.js';
 import { normalizeActivity } from './intervals-model.js';
-import { createStructuredWorkout } from './workout-details-model.js';
-import { estimateWorkoutTss } from './workout-load-model.js';
+import {workoutInfo} from './src/workouts/workout-service.js';
+import {progressionLevel,candidateSession,boundaryBlocks} from './src/workouts/progression.js';
 import { buildPrivacySafeReport } from './training-analysis-model.js';
 import { deriveAdaptiveWeekPolicy } from './adaptive-week-policy.js';
 import { assessPeriodizationLoad, historyWindow } from './periodization-policy.js';
@@ -63,20 +63,7 @@ function sessions(start){
 }
 function storeSessions(start,items){localStorage.setItem(getWorkoutKey(start),JSON.stringify({version:1,start,sessions:items}));}
 function getSession(date){return sessions(weekStartOf(parseDate(date))).find(s=>s.date===date)||null}
-function workoutInfo(s,week){
-  if(!s)return {load:null,workout:null,reason:'Geen training'};
-  if(s.group)return {load:null,workout:null,reason:'Groepsrit: belasting afhankelijk van de uitvoering'};
-  try{
-    // Alleen %FTP bepaalt relatieve power-TSS. De referentie-FTP dient
-    // uitsluitend om de bestaande workoutbuilder aan te roepen.
-    const phase=week?.phase==='Recovery'?'Herstel':'Opbouw';
-    const builder=['force','skills','anaerobic','power'].includes(s.type)?skillWorkout:createStructuredWorkout;
-    const workout=builder({type:s.type,durationMinutes:s.durationMinutes,
-      ftp:300,protocol:s.protocol||'classic',phase});
-    return {load:estimateWorkoutTss(workout).estimatedTss,workout,reason:null};
-  }catch(e){return {load:null,workout:null,reason:e.message};}
-}
-function weekSessionStats(start){const week=weekFor(app.plan,start);const items=sessions(start);
+function weekSessionStats(start){const week=effectivePlanWeek(app.plan,start,weekStartOf(today())).week;const items=sessions(start);
   const result=sumKnownLoads(items.map(s=>({load:workoutInfo(s,week).load})));
   return {...result,items};
 }
@@ -320,7 +307,7 @@ function renderTimeline(){
     add(button,'strong','',num(w.targetLoad));
     const wrap=add(button,'div','l39-timeline-barwrap');const bar=add(wrap,'div',`l39-timeline-bar ${w.phase.toLowerCase()}`);
     bar.style.setProperty('--bar-height',`${Math.max(7,w.targetLoad/max*100)}%`);
-    add(button,'small','',`W${w.week}`);button.title=`${w.phase} • week ${weekNumber(w.start)} • ${w.targetLoad} load`;
+    add(button,'small','',`W${w.week}`);add(button,'small','',w.phase==='Recovery'?'Herstel':'N'+progressionLevel(app.plan,w));button.title=`${w.phase} • week ${weekNumber(w.start)} • ${w.targetLoad} load • ${w.phase==='Recovery'?'herstel':'niveau '+progressionLevel(app.plan,w)}`;
   }
 }
 async function loadPlan(){if(!app.userId)return;renderTimeline();await renderTwoWeeks()}
@@ -477,17 +464,23 @@ async function proposeWeek(){
       const seen=[];
       if(stimulus?.classes?.some(c=>c.indicators.includes('repeated-vo2-like-intervals-observed')))seen.push('vo2max');
       if(stimulus?.classes?.some(c=>c.indicators.includes('repeated-threshold-like-intervals-observed')))seen.push('threshold');
+      const level=progressionLevel(app.plan,week);
+      const dates=weekDates(weekStart);
+      const prevStart=dateKey(addDays(parseDate(weekStart),-7)),nextStart=dateKey(addDays(parseDate(weekStart),7));
+      const prev=prepared.find(item=>item.start===prevStart)?.merged??sessions(prevStart);
+      const next=sessions(nextStart);
+      const boundary=boundaryBlocks({dates,previous:prev,next});
       const estimates=new Map();
       const result=proposeSkillWeek({dates:weekDates(weekStart),availability:usable,target:groupOnly?0:remainingTarget,
-        maxQuality:groupOnly?0:phasePolicy.maxQualitySessions,blocked:phasePolicy.blockedQualityDates,
+        maxQuality:groupOnly?0:phasePolicy.maxQualitySessions,blocked:[...new Set([...phasePolicy.blockedQualityDates,...boundary])],
         qualityTypes:qualityOrder(app.plan.discipline,week.phase,app.plan.limiter,app.plan.limiterAnalysis,seen),phase:week.phase,
         fixed:groups,
-        loadFor:(type,durationMinutes)=>{const k=type+':'+durationMinutes;if(!estimates.has(k))estimates.set(k,workoutInfo({type,durationMinutes},week).load??NaN);return estimates.get(k);}
+        loadFor:(type,durationMinutes)=>{const k=type+':'+durationMinutes;if(!estimates.has(k))estimates.set(k,workoutInfo(candidateSession(type,durationMinutes,level,week.phase),week).load??NaN);return estimates.get(k);}
       });
       if(result.unknownFixed)warnings.push('Groepsrit behouden; onbekende load en herstel conservatief behandeld.');
       const suggestions=result.sessions
         .filter(s=>s.date>=now && !occupiedDates.includes(s.date))
-        .map(s=>({date:s.date,type:s.type,durationMinutes:s.durationMinutes,protocol:'classic',group:!!s.group}));
+        .map(s=>({date:s.date,...candidateSession(s.type,s.durationMinutes,level,week.phase),group:!!s.group}));
       if(!suggestions.length&&!groupOnly){
         warnings.push(`Week ${weekNumber(weekStart)}: geen passende trainingen mogelijk.`);
         continue;
@@ -505,7 +498,7 @@ async function proposeWeek(){
       return;
     }
     const replacing=prepared.filter(item=>item.existing.some(s=>s.date>=now));
-    const preview=prepared.map(item=>`Week ${weekNumber(item.start)}:\n`+(item.suggestions.length?item.suggestions.map(s=>`${s.date}: ${s.group?'Groepsrit':typeLabel(s.type)} · ${s.durationMinutes} min`).join('\n'):'Geen aanvullende trainingen')).join('\n\n');
+    const preview=prepared.map(item=>`Week ${weekNumber(item.start)}:\n`+(item.suggestions.length?item.suggestions.map(s=>`${s.date}: ${s.group?'Groepsrit':typeLabel(s.type)} · ${s.durationMinutes} min${s.level?' · niveau '+s.level:''}`).join('\n'):'Geen aanvullende trainingen')).join('\n\n');
     if(!window.confirm(`${preview}\n\n${replacing.length?'Bestaande toekomstige trainingen worden vervangen. ':''}Voorstel bevestigen?`))return;
     for(const item of prepared)storeSessions(item.start,item.merged);
     syncPlanner({automatic:true});
@@ -649,32 +642,38 @@ async function openWorkout(date){
     const capacity=available[date]?.available_minutes;
     if(capacity===null)throw new Error('Geen beschikbare minuten voor deze datum bekend.');
     const s=getSession(date),phase=effectivePlanWeek(app.plan,start,weekStartOf(today())).week;
-    app.workoutModal={date,start,capacity,phase};
+    app.workoutModal={date,start,capacity,phase,saved:s};
     $('l39-workout-title').textContent=`${prettyDate(date)} · Training aanpassen`;
     const fixed=fixedLabel(available[date]?.workout).toLowerCase();
     $('l39-workout-type').value=s?.group||isGroupRide(fixed)?'group':s?.type||'endurance';
     $('l39-workout-duration').value=String(s?.group?s.durationMinutes:isGroupRide(fixed)?Math.min(360,Math.floor(capacity/15)*15):s?.durationMinutes||Math.max(15,Math.min(60,Math.floor(capacity/15)*15)));
     $('l39-workout-duration').max=String(Math.min(360,capacity));
     $('l39-workout-protocol').value=s?.protocol||'classic';
+    $('l39-workout-level').value=String(s?.level||progressionLevel(app.plan,phase));
     $('l39-workout-capacity').textContent=`${fmtMinutes(capacity)} beschikbaar · ${phase?.phase??'Geen fase'}`;
     status('l39-workout-modal-status','');renderWorkoutPreview();$('l39-workout-dialog').showModal();
   }catch(e){status('l39-plan-status',e.message,'error')}
 }
 function readWorkoutControls(){return {date:app.workoutModal.date,
   type:$('l39-workout-type').value,durationMinutes:Number($('l39-workout-duration').value),
-  protocol:$('l39-workout-protocol').value};}
+  protocol:$('l39-workout-protocol').value,...($('l39-workout-protocol').value==='progressive'?{level:Number($('l39-workout-level').value)}:{}),prescribedPhase:app.workoutModal.phase?.phase==='Recovery'?'Herstel':'Opbouw'};}
 function previewWorkoutResult(){
   if(!app.workoutModal)throw new Error('Geen dag geselecteerd.');
   const s=readWorkoutControls();
   if(s.type==='rest')return {s,info:null};
   if(s.type==='group')return {s,info:{load:null,workout:null,reason:'Groepsritten hebben geen vast vermogensprofiel. TSS wordt na uitvoering geregistreerd.'}};
+  const old=app.workoutModal.saved;
+  if(old&&old.type===s.type&&old.protocol===s.protocol&&old.level===s.level&&old.durationMinutes===s.durationMinutes&&old.prescribedPhase)s.prescribedPhase=old.prescribedPhase;
   return {s,info:workoutInfo(s,app.workoutModal.phase)};
 }
 function renderWorkoutPreview(){
   const host=$('l39-workout-chart'),steps=$('l39-workout-steps');host.replaceChildren();steps.replaceChildren();
   const type=$('l39-workout-type').value;
-  $('l39-workout-protocol').disabled=!['threshold','vo2max'].includes(type);
-  if($('l39-workout-protocol').disabled)$('l39-workout-protocol').value='classic';
+  const progressive=['threshold','vo2max','force','skills','anaerobic','power'].includes(type);
+  $('l39-workout-protocol').disabled=!progressive;
+  $('l39-workout-protocol').querySelector('option[value=long]').disabled=!['threshold','vo2max'].includes(type);
+  if(!progressive||$('l39-workout-protocol').value==='long'&&!['threshold','vo2max'].includes(type))$('l39-workout-protocol').value='classic';
+  $('l39-workout-level').disabled=!progressive||$('l39-workout-protocol').value!=='progressive';
   $('l39-workout-duration').disabled=type==='rest';
   try{
     const {s,info}=previewWorkoutResult();
@@ -686,8 +685,8 @@ function renderWorkoutPreview(){
     $('l39-workout-tss').textContent=num(info.load);$('l39-workout-hard').textContent=String(info.workout.hardMinutes);
     for(const step of info.workout.steps){
       const slot=add(host,'div','bar-slot');slot.style.flex=String(step.seconds);
-      const bar=add(slot,'div',`bar ${step.kind}`);bar.style.setProperty('--bar-height',`${Math.max(8,step.percentFtp/130*100)}%`);
-      bar.title=`${step.label} · ${Math.round(step.seconds/60)}m · ${step.percentFtp}% FTP`;
+      const bar=add(slot,'div',`bar ${step.kind}`);bar.style.setProperty('--bar-height',`${Math.max(8,step.percentFtp/200*100)}%`);
+      bar.title=`${step.label} · ${step.seconds<60?step.seconds+'s':Math.round(step.seconds/60*10)/10+'m'} · ${step.percentFtp}% FTP`;
       const row=add(steps,'div','l39-workout-step');add(row,'span','',`${step.label} · ${step.seconds<60?step.seconds+' sec':Math.round(step.seconds/60*10)/10+' min'}`);
       add(row,'strong','',`${step.percentFtp}% FTP`);
     }
@@ -714,7 +713,7 @@ async function saveWorkout(event){
 }
 async function exportWorkout(){
   const b=$('l39-export-workout');if(b.disabled)return;
-  try{const {s,info}=previewWorkoutResult();const saved=getSession(s.date);if(!info?.workout||!saved||saved.group||saved.type!==s.type||saved.durationMinutes!==s.durationMinutes||(saved.protocol||'classic')!==s.protocol)throw Error('Bewaar de gestructureerde training eerst en open hem opnieuw.');
+  try{const {s,info}=previewWorkoutResult();const saved=getSession(s.date);if(!info?.workout||!saved||saved.group||saved.type!==s.type||saved.durationMinutes!==s.durationMinutes||(saved.protocol||'classic')!==s.protocol||saved.level!==s.level)throw Error('Bewaar de gestructureerde training eerst en open hem opnieuw.');
     if(s.date<nowKey())throw Error('Geen export van verstreken dagen.');
     if(!confirm('Exporteer '+info.workout.title+' op '+s.date+' naar je echte Intervals.icu-kalender?'))return;
     b.disabled=true;status('l39-workout-modal-status','Exporteren…');const result=await exportIntervalsWorkout({date:s.date,title:info.workout.title,description:workoutText(info.workout)});status('l39-workout-modal-status','Export bevestigd · event '+result.id,'good');
@@ -766,7 +765,7 @@ function registerListeners(){
   $('l39-workout-form').addEventListener('submit',saveWorkout);
   $('l39-copy-workout').addEventListener('click',copyWorkout);
   $('l39-export-workout').addEventListener('click',exportWorkout);
-  for(const id of ['l39-workout-type','l39-workout-duration','l39-workout-protocol'])$(id).addEventListener('input',renderWorkoutPreview);
+  for(const id of ['l39-workout-type','l39-workout-duration','l39-workout-protocol','l39-workout-level'])$(id).addEventListener('input',renderWorkoutPreview);
   $('l39-cloud-enabled').addEventListener('change',()=>{if(app.userId)localStorage.setItem('mtb-cloud-enabled:'+app.userId,$('l39-cloud-enabled').checked?'1':'0');});
   $('l39-cloud-sync').addEventListener('click',()=>syncPlanner());
   $('l39-cloud-local').addEventListener('click',()=>{if(confirm('Lokale versie als cloudversie bewaren? Alleen bij een conflict wordt de cloudversie vervangen.'))syncPlanner({resolveConflict:'local'});});

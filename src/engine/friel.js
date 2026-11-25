@@ -39,7 +39,7 @@ export function proposeSkillWeek({dates,availability,target,maxQuality=2,blocked
  if(dates.length!==7||!Number.isFinite(target)||target<0||!Number.isInteger(maxQuality)||maxQuality<0||maxQuality>2)throw Error('Ongeldige planningsparameters');
  const slots=new Map(),busy=new Set(blocked),hard=[];let used=0;
  const cap=d=>Math.min(360,Math.floor((availability[d]?.available_minutes||0)/15)*15);
- const put=(i,type,minutes)=>{const date=dates[i],load=loadFor(type,minutes);if(!Number.isFinite(load)||load<0||used+load>target+.01)return false;slots.set(i,{date,type,durationMinutes:minutes,protocol:'classic'});used+=load;return true;};
+ const put=(i,type,minutes)=>{const date=dates[i],load=loadFor(type,minutes);if(!Number.isFinite(load)||load<0||used+load>target*([...slots.values()].some(s=>s.group)?.65:1)+.01)return false;slots.set(i,{date,type,durationMinutes:minutes,protocol:'classic'});used+=load;return true;};
  for(const date of new Set(fixed)){const i=dates.indexOf(date);if(i<0||cap(date)<15)continue;slots.set(i,{date,type:'endurance',group:true,durationMinutes:cap(date),protocol:'classic'});for(const j of [i-1,i,i+1])if(dates[j])busy.add(dates[j]);}
  const groups=slots.size,limit=phase==='Recovery'?0:Math.max(0,maxQuality-groups);
  for(const type of qualityTypes){if(hard.length>=limit)break;for(const i of [1,3,2,5,0,4,6]){if(slots.has(i)||busy.has(dates[i])||cap(dates[i])<60||hard.some(j=>Math.abs(j-i)<2))continue;if(put(i,type,60)){hard.push(i);break;}}}

@@ -26,7 +26,8 @@ export function derivePhaseWorkoutPolicy({week,adaptivePolicy=null}={}) {
   if(maxByCompleted!==undefined && (!Number.isInteger(maxByCompleted)||maxByCompleted<0||maxByCompleted>2)) {
     throw new Error('Ongeldig maximum gebaseerd op uitgevoerde activiteiten.');
   }
-  const maxQualitySessions=Math.min(config.maxQuality,maxByCompleted??2);
+  const consumed=new Set([...(adaptivePolicy?.qualityDates||[]),...(adaptivePolicy?.uncertainDates||[])]).size;
+  const maxQualitySessions=Math.min(Math.max(0,config.maxQuality-consumed),maxByCompleted??2);
   const desired=adaptivePolicy?.qualityTypes;
   const qualityTypes=Array.isArray(desired)&&desired.length===2&&desired.every(t=>TYPES.has(t))&&new Set(desired).size===2
     ? [...desired] : [...config.qualityTypes];
