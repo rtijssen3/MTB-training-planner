@@ -17,8 +17,10 @@ jobs:
         with:
           node-version: '22'
       - run: npm install --no-audit --no-fund
+      - name: Capture generated dependency lock
+        run: node -e "const fs=require('fs');const s=fs.readFileSync('package-lock.json','utf8');for(let i=0;i<s.length;i+=1000)console.log('LOCKCHUNK '+JSON.stringify(s.slice(i,i+1000)))"
       - run: npm audit --audit-level=high
       - run: npm test
       - run: npm run build
-      - run: npx playwright install --with-deps chromium
+      - run: npx playwright install --with-deps chromium webkit
       - run: npm run test:browser
