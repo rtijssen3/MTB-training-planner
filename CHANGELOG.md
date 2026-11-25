@@ -2,6 +2,13 @@
 
 All notable changes to the MTB Training Planner are documented in this file.
 
+## [1.0.0-rc.1]
+
+- Feature freeze: event plans, Friel-inspired training priorities, adaptive workouts and rider feedback.
+- Existing availability, calendar summary column, cloud synchronization and explicit export retained.
+- Extracted browser persistence; retained existing keys. Added isolated browser regression tests and release documentation.
+- Live Supabase/Intervals export and deployment require release acceptance checks.
+
 ## [0.2.0] - 2026-11-20
 
 ### Added
