@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="nl"><head><meta charset="utf-8"><title>Weekload na uitgevoerde trainingen</title>
+<style>body{font:16px system-ui;max-width:760px;margin:3rem auto;padding:1rem}.pass{color:#168451}.fail{color:#bb3030}</style></head>
+<body><h1>Regressietests – resterende TSS</h1><div id="results"></div><h2 id="total"></h2>
+<script type="module">
+import {remainingWeekLoad,proposalAvailability,mergeFutureSessions} from '../planner-model.js';
+const start='2026-11-23',today='2026-11-25';
+const activity=(id,date,trainingLoad)=>({id,date,trainingLoad});
+const base=[activity('a','2026-11-23',120),activity('b','2026-11-24',95)];
+const cases=[];
+function add(name,actual,expected){cases.push({name,actual,expected});}
+let r=remainingWeekLoad(400,base,start,today);
+add('Reeds uitgevoerde load',r.completedLoad,215);
+add('Resterend weekdoel',r.remainingLoad,185);
+add('Geen ontbrekende load',r.missingLoadCount,0);
+add('Dagen met uitgevoerde training',r.occupiedDates.join(','),'2026-11-23,2026-11-24');
+r=remainingWeekLoad(200,base,start,today);
+add('Weekdoel is bereikt',r.targetReached,true);
+add('Geen negatieve resterende load',r.remainingLoad,0);
+r=remainingWeekLoad(400,[...base,activity('c','2026-11-25',null)],start,today);
+add('Onbekende load gerapporteerd',r.missingLoadCount,1);
+add('Onbekende load maakt restdoel onbekend',r.remainingLoad,null);
+r=remainingWeekLoad(400,[...base,activity('x','2026-11-26',100)],start,today);
+add('Toekomstig record niet uitgevoerde load',r.completedLoad,215);
+r=remainingWeekLoad(400,[...base,base[0]],start,today);
+add('Dubbele ID niet dubbeltellen',r.completedLoad,215);
+r=remainingWeekLoad(400,[activity('c','2026-11-25',80)],start,today);
+add('Vandaag telt wel mee',r.completedLoad,80);
+r=remainingWeekLoad(400,[],start,today);
+add('Geen uitgevoerde ritten geeft volledig restdoel',r.remainingLoad,400);
+const availability=Object.fromEntries(['23','24','25','26','27','28','29'].map(d=>[`2026-11-${d}`,{available_minutes:90}]));
+const usable=proposalAvailability(availability,start,today);
+add('Verstreken maandag is niet planbaar',usable['2026-11-23'].available_minutes,0);
+add('Huidige woensdag blijft planbaar',usable['2026-11-25'].available_minutes,90);
+const old=[{date:'2026-11-23',type:'endurance',durationMinutes:90}];
+const next=[{date:'2026-11-26',type:'threshold',durationMinutes:60}];
+add('Oude dagen blijven bij samenvoegen',mergeFutureSessions(old,next,today).length,2);
+let pass=0;const container=document.getElementById('results');
+for(const c of cases){const ok=Object.is(c.actual,c.expected);pass+=ok;const p=document.createElement('p');p.className=ok?'pass':'fail';p.textContent=`${ok?'PASS':'FAIL'} – ${c.name}`+(ok?'':` (verwacht ${c.expected}, ontving ${c.actual})`);container.append(p);}
+document.getElementById('total').textContent=`${pass}/${cases.length} geslaagd`;
+</script></body></html>

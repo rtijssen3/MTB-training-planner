@@ -9,7 +9,7 @@ import { estimateWorkoutTss } from './workout-load-model.js';
 import { proposeWorkoutWeek } from './workout-plan-model.js';
 import {
   WEEKDAYS,dateKey,parseDate,addDays,monday,weekDates,weekStartOf,weekNumber,
-  monthWeeks,intervalChunks,createMesocycle,migrateLegacyPlan,weekFor,typeLabel,sumKnownLoads
+  monthWeeks,intervalChunks,createMesocycle,migrateLegacyPlan,weekFor,effectivePlanWeek,typeLabel,sumKnownLoads,proposalAvailability,mergeFutureSessions,remainingWeekLoad
 } from './planner-model.js';
 
 const $=id=>document.getElementById(id);
@@ -26,12 +26,12 @@ const localAvailabilityPrefix='mtb-availability-local:v1:';
 
 const app={userId:null,plan:null,month:new Date(today().getFullYear(),today().getMonth(),1),focusedWeek:null,
   availability:new Map(),activityCache:new Map(),wellness:null,activeTab:'dashboard',
-  weekModal:null,workoutModal:null,renderNumber:0,authGeneration:0,activityError:null};
+  weekModal:null,workoutModal:null,renderNumber:0,authGeneration:0,activityError:null,planDirty:false,proposing:false};
 
 function status(id,message,kind='') {const el=$(id);if(!el)return;el.textContent=message;el.classList.toggle('is-error',kind==='error');el.classList.toggle('is-good',kind==='good');}
 function htmlNode(tag,cls,text){const el=document.createElement(tag);if(cls)el.className=cls;if(text!==undefined)el.textContent=String(text);return el;}
 function add(parent,tag,cls,text){const node=htmlNode(tag,cls,text);parent.appendChild(node);return node;}
-function cleanUser(){app.userId=null;app.plan=null;app.activityCache.clear();app.availability.clear();app.wellness=null;app.activityError=null;app.authGeneration++;$('l39-dashboard-body').hidden=true;$('l39-calendar-grid').replaceChildren();$('l39-two-weeks').replaceChildren();$('l39-timeline').replaceChildren();for(const d of document.querySelectorAll('dialog[open]'))d.close();}
+function cleanUser(){app.userId=null;app.plan=null;app.planDirty=false;app.activityCache.clear();app.availability.clear();app.wellness=null;app.activityError=null;app.authGeneration++;$('l39-dashboard-body').hidden=true;$('l39-calendar-grid').replaceChildren();$('l39-two-weeks').replaceChildren();$('l39-timeline').replaceChildren();for(const d of document.querySelectorAll('dialog[open]'))d.close();}
 function getPlanKey(){return PLAN_PREFIX+app.userId;}
 function getWorkoutKey(start){return `${WORKOUT_PREFIX}${app.userId}:${start}`;}
 function getOverrideKey(){return localAvailabilityPrefix+app.userId;}
@@ -121,7 +121,8 @@ async function loadDashboard(){
   if(!app.userId)return;
   const generation=app.authGeneration,view=++app.renderNumber;
   status('l39-dashboard-status','Laden...');
-  const start=weekStartOf(today()),dates=weekDates(start),week=weekFor(app.plan,start);
+  const start=weekStartOf(today()),dates=weekDates(start);
+  const {week,indicative}=effectivePlanWeek(app.plan,start,start);
   try{
     const [available,activities]=await Promise.all([availabilityForWeek(start),getActivitiesRange(dates[0],dates[6])]);
     if(generation!==app.authGeneration||view!==app.renderNumber)return;
@@ -138,7 +139,7 @@ async function loadDashboard(){
     $('l39-progress-fill').style.width=`${Math.min(100,Math.max(0,pct??0))}%`;
     $('l39-week-footnote').textContent=`${finished.length} uitgevoerde activiteiten · ${planned.items.length} geplande trainingen`+
       (completed.missing?` · ${completed.missing} activiteiten zonder load`: '')+
-      (!week?' · Stel een weekdoel in via Plan overview.':'');
+      (!week?' · Stel een weekdoel in via Plan overview.':indicative?' · Weekdoel indicatief overgenomen uit de eerste mesocycleweek.':'');
     const upcoming=$('l39-upcoming');upcoming.replaceChildren();
     const future=dates.filter(d=>d>=nowKey());
     for(const key of future){
@@ -189,19 +190,19 @@ function renderCalendar(rows,activities,currentMonth,failed=false){
   const host=$('l39-calendar-grid');host.replaceChildren();
   const byDate=new Map();for(const a of activities){if(!byDate.has(a.date))byDate.set(a.date,[]);byDate.get(a.date).push(a)}
   for(const row of rows){
-    const phase=weekFor(app.plan,row.start);const stat=weekSessionStats(row.start);
+    const {week:phase,indicative}=effectivePlanWeek(app.plan,row.start,weekStartOf(today()));const stat=weekSessionStats(row.start);
     const section=htmlNode('div','l39-cal-week');
     const band=htmlNode('div',`l39-week-phase ${(phase?.phase||'').toLowerCase()}`);
     band.style.display=phase&&row.end>=nowKey()?'flex':'none';
     add(band,'span','',`${phase?.phase??''} · ${app.plan?.name??''}`);
-    add(band,'span','',`Geplande weekload ${phase?.targetLoad??'—'}`);
+    add(band,'span','',`Geplande weekload ${phase?.targetLoad??'—'}${indicative?' (indicatief)':''}`);
     const line=htmlNode('div','l39-cal-row');
     const summary=add(line,'div','l39-week-meta');add(summary,'strong','',`Week ${row.number}`);
     add(summary,'small','',`${prettyDate(row.start)} – ${prettyDate(row.end)}`);
     const weekExecuted=activities.filter(a=>a.date>=row.start&&a.date<=row.end);
     const total=sumKnownLoads(weekExecuted.map(a=>({load:a.trainingLoad})));
     add(summary,'small','',failed?'Uitgevoerd: niet beschikbaar':`Uitgevoerd: ${num(total.total)}${total.missing?'*':''}`);
-    if(phase)add(summary,'em','',`Doel: ${phase.targetLoad}`);
+    if(phase)add(summary,'em','',`Doel: ${phase.targetLoad}${indicative?' (indicatief)':''}`);
     if(stat.items.length)add(summary,'small','',`Workouts: ${stat.missing?'load onbekend':num(stat.total)}`);
     for(const day of row.days){
       const d=parseDate(day),dateCell=add(line,'div','l39-cal-day');
@@ -228,7 +229,7 @@ function renderCalendar(rows,activities,currentMonth,failed=false){
 
 // PLAN OVERVIEW ---------------------------------------------------
 function fillPlanForm(plan){
-  if(!plan){$('l39-plan-start').value=dateKey(addDays(monday(today()),7));return;}
+  if(!plan){$('l39-plan-start').value=weekStartOf(today());return;}
   $('l39-plan-name').value=plan.name||'Mijn trainingsplan';$('l39-plan-start').value=plan.start;
   $('l39-plan-race').value=plan.raceDate||'';$('l39-plan-weeks').value=plan.weeks.length;
   $('l39-plan-base').value=plan.baseLoad;$('l39-plan-growth').value=plan.progression;
@@ -268,14 +269,14 @@ async function renderTwoWeeks(){
   }catch(e){if(generation===app.authGeneration){host.replaceChildren();add(host,'p','l39-status',`Beschikbaarheid kon niet worden geladen: ${e.message}`);}}
 }
 function renderWeekCard(host,start,availability){
-  const keys=weekDates(start),planWeek=weekFor(app.plan,start),info=weekSessionStats(start),container=add(host,'section','l39-week-card');
+  const keys=weekDates(start),{week:planWeek,indicative}=effectivePlanWeek(app.plan,start,weekStartOf(today())),info=weekSessionStats(start),container=add(host,'section','l39-week-card');
   const head=add(container,'div','l39-week-card-head');
   head.title='Klik om de beschikbaarheid van de hele week te bewerken';head.tabIndex=0;
   head.addEventListener('click',event=>{if(!event.target.closest('button'))openAvailability(start)});
   head.addEventListener('keydown',event=>{if(event.target===head&&(event.key==='Enter'||event.key===' ')){event.preventDefault();openAvailability(start)}});
   const title=add(head,'div');
   add(title,'h3','',`Week ${weekNumber(start)} · ${prettyDate(keys[0])} – ${prettyDate(keys[6])}`);
-  add(title,'small','',`${planWeek?.phase??'Geen fase'} · ${planWeek?num(planWeek.targetLoad)+' load gepland':'Nog geen weekdoel'}`);
+  add(title,'small','',`${planWeek?.phase??'Geen fase'} · ${planWeek?num(planWeek.targetLoad)+(indicative?' load indicatief':' load gepland'):'Nog geen weekdoel'}`);
   const edit=add(head,'button','l39-week-edit','✎ Bewerk week');edit.dataset.action='availability';edit.dataset.week=start;edit.type='button';
   const days=add(container,'div','l39-week-days');
   for(const [i,key] of keys.entries()){
@@ -295,20 +296,107 @@ function renderWeekCard(host,start,availability){
   add(foot,'span','',`Workouts: ${info.items.length?info.missing?'TSS onvolledig':num(info.total)+' TSS':'nog niet gepland'}`);
 }
 async function proposeWeek(){
-  if(!app.userId)return;
-  const start=weekWindowStart();const current=app.plan&&weekFor(app.plan,start);
-  if(!current){status('l39-plan-status','Kies via de timeline een week met een belastingdoel, of genereer eerst een trainingsplan.','error');return}
+  if(!app.userId || app.proposing)return;
+  if(!app.plan){
+    status('l39-plan-status','Genereer eerst een mesocycle.','error');
+    return;
+  }
+  app.proposing=true;
+  const button=$('l39-propose');button.disabled=true;
   try{
-    const availability=await availabilityForWeek(start);
-    const result=proposeWorkoutWeek({week:{...current,phase:current.phase==='Recovery'?'Herstel':'Opbouw'},availabilityByDate:availability});
-    const future=result.sessions.filter(s=>s.date>=nowKey()).map(s=>({date:s.date,type:s.type,durationMinutes:s.durationMinutes,protocol:'classic'}));
-    if(!future.length)throw new Error('In deze week zijn geen toekomstige trainingsmomenten beschikbaar.');
-    // Al bestaande concepten bewaren: nooit stilzwijgend overschrijven.
-    if(sessions(start).length&&!confirm(`Voor week ${weekNumber(start)} bestaat al een concept. Overschrijven?`))return;
-    storeSessions(start,future);status('l39-plan-status',`${future.length} trainingen voorgesteld. Controleer de inhoud: het is nog geen persoonlijk gevalideerd schema.`,'good');
+    if(app.planDirty && window.confirm('Huidige mesocycle opslaan?'))savePlan();
+    const start=weekWindowStart();
+    const second=dateKey(addDays(parseDate(start),7));
+    const starts=[start,second];
+    const prepared=[];
+    const warnings=[];
+    const now=nowKey();
+    const currentWeek=weekStartOf(today());
+
+    // Bereken beide weken voordat we iets in de lokale opslag schrijven.
+    // Voor de huidige week tellen uitgevoerde activiteiten eerst mee.
+    for(const weekStart of starts){
+      const {week,indicative}=effectivePlanWeek(app.plan,weekStart,currentWeek);
+      if(!week){
+        warnings.push(`Week ${weekNumber(weekStart)} heeft geen mesocycle-doel en is overgeslagen.`);
+        continue;
+      }
+      if(weekDates(weekStart)[6] < now){
+        warnings.push(`Week ${weekNumber(weekStart)} is afgesloten en wordt niet gewijzigd.`);
+        continue;
+      }
+      if(indicative)warnings.push(`Week ${weekNumber(weekStart)}: indicatief doel uit de eerste mesocycleweek.`);
+      const availability=await availabilityForWeek(weekStart);
+      const usable=proposalAvailability(availability,weekStart,now);
+      let remainingTarget=week.targetLoad;
+      let completedLoad=0;
+      let occupiedDates=[];
+
+      if(weekStart===currentWeek){
+        // Een reeds voltooide training telt mee voor het weekdoel.
+        // Ophalen met force om een eerder geladen browsercache niet
+        // onbedoeld als nieuwe stand van de week te beschouwen.
+        const records=await getActivitiesRange(weekStart,now,{force:true});
+        const progress=remainingWeekLoad(week.targetLoad,records,weekStart,now);
+        completedLoad=progress.completedLoad;
+        occupiedDates=progress.occupiedDates;
+        if(progress.missingLoadCount){
+          warnings.push(`Week ${weekNumber(weekStart)}: ${progress.missingLoadCount} uitgevoerde activiteit(en) zonder trainingsload. Restdoel onbekend; geen automatisch voorstel voor deze week.`);
+          continue;
+        }
+        remainingTarget=progress.remainingLoad;
+        if(progress.targetReached){
+          warnings.push(`Week ${weekNumber(weekStart)}: het weekdoel is met ${completedLoad} load al bereikt. Geen extra training voorgesteld.`);
+          continue;
+        }
+        // Bescherm dagen waarop deze week al een training is uitgevoerd.
+        for(const day of occupiedDates){
+          if(usable[day])usable[day].available_minutes=0;
+        }
+      }
+
+      if(!Object.values(usable).some(v=>v.available_minutes>=45)){
+        warnings.push(`Week ${weekNumber(weekStart)} heeft geen resterende beschikbare momenten van minstens 45 minuten.`);
+        continue;
+      }
+      const result=proposeWorkoutWeek({
+        week:{...week,targetLoad:Math.max(1,remainingTarget),phase:week.phase==='Recovery'?'Herstel':'Opbouw'},
+        availabilityByDate:usable
+      });
+      const suggestions=result.sessions
+        .filter(s=>s.date>=now && !occupiedDates.includes(s.date))
+        .map(s=>({date:s.date,type:s.type,durationMinutes:s.durationMinutes,protocol:'classic'}));
+      if(!suggestions.length){
+        warnings.push(`Week ${weekNumber(weekStart)}: geen passende trainingen mogelijk.`);
+        continue;
+      }
+      const existing=sessions(weekStart);
+      const preservedToday=existing.filter(s=>occupiedDates.includes(s.date));
+      prepared.push({start:weekStart,suggestions,existing,
+        // Behoud reeds uitgevoerde dagen, inclusief vandaag.
+        merged:[...mergeFutureSessions(existing,suggestions,now),...preservedToday]
+          .sort((a,b)=>a.date.localeCompare(b.date)),
+        completedLoad,remainingTarget});
+    }
+    if(!prepared.length){
+      status('l39-plan-status',warnings.join(' ')||'Geen resterende trainingsmomenten beschikbaar.','error');
+      return;
+    }
+    const replacing=prepared.filter(item=>item.existing.some(s=>s.date>=now));
+    if(replacing.length && !window.confirm(`Voor ${replacing.map(item=>'week '+weekNumber(item.start)).join(' en ')} bestaan al trainingsvoorstellen. Alleen de komende trainingen overschrijven?`))return;
+    for(const item of prepared)storeSessions(item.start,item.merged);
+    const count=prepared.reduce((sum,item)=>sum+item.suggestions.length,0);
+    const current=prepared.find(item=>item.start===currentWeek);
+    const detail=current?` Huidige week: ${current.completedLoad} load uitgevoerd, ${current.remainingTarget} load resterend vóór het voorstel.`:'';
+    status('l39-plan-status',`${count} trainingen voorgesteld voor ${prepared.length} week/weken.${detail} ${warnings.join(' ')} TSS-voorstellen blijven schattingen.`,'good');
     await renderTwoWeeks();
-  }catch(e){status('l39-plan-status',e.message,'error')}
+  }catch(e){
+    status('l39-plan-status',e.message,'error');
+  }finally{
+    app.proposing=false;button.disabled=false;
+  }
 }
+
 function generatePlan(event){
   event.preventDefault();
   try{
@@ -316,13 +404,14 @@ function generatePlan(event){
       baseLoad:$('l39-plan-base').value,progression:$('l39-plan-growth').value,
       recoveryReduction:$('l39-plan-reduction').value,recoveryEvery:$('l39-plan-recovery-every').value,
       plateau:$('l39-plan-plateau').value,raceDate:$('l39-plan-race').value};
-    app.plan=createMesocycle(data);app.focusedWeek=null;renderTimeline();renderTwoWeeks();
-    status('l39-plan-status','Concept gegenereerd. Klik op Bewaar trainingsplan om het lokaal op te slaan.','good');
+    app.plan=createMesocycle(data);app.planDirty=true;app.focusedWeek=null;renderTimeline();renderTwoWeeks();
+    status('l39-plan-status','Concept gegenereerd maar nog niet opgeslagen. Klik op Bewaar mesocycle.','good');
   }catch(e){status('l39-plan-status',e.message,'error')}
 }
 function savePlan(){
   if(!app.plan||!app.userId){status('l39-plan-status','Genereer eerst een plan.','error');return}
   localStorage.setItem(getPlanKey(),JSON.stringify(app.plan));
+  app.planDirty=false;
   status('l39-plan-status','Mesocycle lokaal bewaard. Nog niet naar Supabase of Intervals.icu verzonden.','good');
 }
 
@@ -538,7 +627,7 @@ function registerListeners(){
 }
 function setSignedIn(user){
   if(app.userId===user.id)return;
-  cleanUser();app.userId=user.id;app.plan=readPlan();app.focusedWeek=null;fillPlanForm(app.plan);
+  cleanUser();app.userId=user.id;app.plan=readPlan();app.planDirty=false;app.focusedWeek=null;fillPlanForm(app.plan);
   const tab=location.hash.slice(1);setTab(['dashboard','calendar','plan'].includes(tab)?tab:'dashboard');
 }
 async function initialize(){

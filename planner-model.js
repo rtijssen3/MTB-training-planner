@@ -162,3 +162,38 @@ export function mergeFutureSessions(existing, suggested, todayKey) {
     ...suggested.filter(session => session.date >= todayKey)
   ].sort((a, b) => a.date.localeCompare(b.date));
 }
+
+
+// Bepaal de nog te plannen belasting binnen een lopende trainingsweek.
+// Ontbrekende load telt nooit als 0: bij onvolledige registraties kunnen
+// we geen betrouwbaar automatisch restdoel vaststellen.
+export function remainingWeekLoad(targetLoad, completedActivities, weekStart, todayKey) {
+  const target = Number(targetLoad);
+  if (!Number.isFinite(target) || target <= 0) throw new Error('Ongeldig TSS-weekdoel.');
+  if (!Array.isArray(completedActivities)) throw new Error('Ongeldige trainingsactiviteiten.');
+  const dates = weekDates(weekStart);
+  const included = new Map();
+  for (const activity of completedActivities) {
+    if (!activity || activity.date < dates[0] || activity.date > dates[6] || activity.date > todayKey) continue;
+    const id = activity.id == null ? `${activity.date}:${included.size}` : String(activity.id);
+    included.set(id, activity);
+  }
+  let completed = 0;
+  let missing = 0;
+  const occupiedDates = new Set();
+  for (const activity of included.values()) {
+    occupiedDates.add(activity.date);
+    if (typeof activity.trainingLoad === 'number' && Number.isFinite(activity.trainingLoad) && activity.trainingLoad >= 0) {
+      completed += activity.trainingLoad;
+    } else {
+      missing++;
+    }
+  }
+  return {
+    completedLoad: Math.round(completed),
+    remainingLoad: missing ? null : Math.max(0, Math.round(target - completed)),
+    missingLoadCount: missing,
+    occupiedDates: [...occupiedDates].sort(),
+    targetReached: missing === 0 && completed >= target
+  };
+}
