@@ -101,7 +101,7 @@ export function evaluateWorkoutPlan({ week, availabilityByDate, sessions }) {
     intensitySessions: intensityIndices.length, warnings };
 }
 
-export function proposeWorkoutWeek({ week, availabilityByDate, maxQualitySessions = 2, blockedQualityDates = [] }) {
+export function proposeWorkoutWeek({ week, availabilityByDate, maxQualitySessions = 2, blockedQualityDates = [], qualityTypes = ['vo2max','threshold'] }) {
   const dates = checkWeek(week);
   const caps = dates.map(date => available(availabilityByDate, date));
   const isRecovery = week.phase === 'Herstel';
@@ -110,6 +110,9 @@ export function proposeWorkoutWeek({ week, availabilityByDate, maxQualitySession
   }
   if (!Array.isArray(blockedQualityDates) || blockedQualityDates.some(date => !dates.includes(date))) {
     throw new Error('Ongeldige herstelbeperking.');
+  }
+  if (!Array.isArray(qualityTypes) || qualityTypes.length < 2 || qualityTypes.some(t=>!['vo2max','threshold'].includes(t))) {
+    throw new Error('Ongeldige voorkeur voor kwaliteitstrainingen.');
   }
   const blocked = new Set(blockedQualityDates);
   const sessions = new Map();
@@ -124,8 +127,8 @@ export function proposeWorkoutWeek({ week, availabilityByDate, maxQualitySession
       chosen.push(index);
       if (chosen.length === maxQualitySessions) break;
     }
-    if (chosen[0] !== undefined) sessions.set(chosen[0], { date: dates[chosen[0]], type: 'vo2max', durationMinutes: 60 });
-    if (chosen[1] !== undefined) sessions.set(chosen[1], { date: dates[chosen[1]], type: 'threshold', durationMinutes: 60 });
+    if (chosen[0] !== undefined) sessions.set(chosen[0], { date: dates[chosen[0]], type: qualityTypes[0], durationMinutes: 60 });
+    if (chosen[1] !== undefined) sessions.set(chosen[1], { date: dates[chosen[1]], type: qualityTypes[1], durationMinutes: 60 });
   }
 
   // Vul overige beschikbare dagen eerst conservatief met duurtraining.

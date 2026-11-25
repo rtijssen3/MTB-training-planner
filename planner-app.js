@@ -7,7 +7,8 @@ import { normalizeActivity } from './intervals-model.js';
 import { createStructuredWorkout, toIntervalsWorkoutText } from './workout-details-model.js';
 import { estimateWorkoutTss } from './workout-load-model.js';
 import { proposeWorkoutWeek } from './workout-plan-model.js';
-import { analyzeCompletedStimulus } from './training-stimulus-model.js';
+import { buildPrivacySafeReport } from './training-analysis-model.js';
+import { deriveAdaptiveWeekPolicy } from './adaptive-week-policy.js';
 import {
   WEEKDAYS,dateKey,parseDate,addDays,monday,weekDates,weekStartOf,weekNumber,
   monthWeeks,intervalChunks,createMesocycle,migrateLegacyPlan,weekFor,effectivePlanWeek,typeLabel,sumKnownLoads,proposalAvailability,mergeFutureSessions,remainingWeekLoad
@@ -27,12 +28,12 @@ const localAvailabilityPrefix='mtb-availability-local:v1:';
 
 const app={userId:null,plan:null,month:new Date(today().getFullYear(),today().getMonth(),1),focusedWeek:null,
   availability:new Map(),activityCache:new Map(),wellness:null,activeTab:'dashboard',
-  weekModal:null,workoutModal:null,renderNumber:0,authGeneration:0,activityError:null,planDirty:false,proposing:false};
+  weekModal:null,workoutModal:null,renderNumber:0,authGeneration:0,activityError:null,planDirty:false,proposing:false,detailCache:new Map()};
 
 function status(id,message,kind='') {const el=$(id);if(!el)return;el.textContent=message;el.classList.toggle('is-error',kind==='error');el.classList.toggle('is-good',kind==='good');}
 function htmlNode(tag,cls,text){const el=document.createElement(tag);if(cls)el.className=cls;if(text!==undefined)el.textContent=String(text);return el;}
 function add(parent,tag,cls,text){const node=htmlNode(tag,cls,text);parent.appendChild(node);return node;}
-function cleanUser(){app.userId=null;app.plan=null;app.planDirty=false;app.activityCache.clear();app.availability.clear();app.wellness=null;app.activityError=null;app.authGeneration++;$('l39-dashboard-body').hidden=true;$('l39-calendar-grid').replaceChildren();$('l39-two-weeks').replaceChildren();$('l39-timeline').replaceChildren();for(const d of document.querySelectorAll('dialog[open]'))d.close();}
+function cleanUser(){app.userId=null;app.plan=null;app.planDirty=false;app.activityCache.clear();app.detailCache.clear();app.availability.clear();app.wellness=null;app.activityError=null;app.authGeneration++;$('l39-dashboard-body').hidden=true;$('l39-calendar-grid').replaceChildren();$('l39-two-weeks').replaceChildren();$('l39-timeline').replaceChildren();for(const d of document.querySelectorAll('dialog[open]'))d.close();}
 function getPlanKey(){return PLAN_PREFIX+app.userId;}
 function getWorkoutKey(start){return `${WORKOUT_PREFIX}${app.userId}:${start}`;}
 function getOverrideKey(){return localAvailabilityPrefix+app.userId;}
@@ -115,6 +116,44 @@ async function getActivitiesRange(start,end,{force=false}={}) {
   const unique=[...new Map(all.map(a=>[a.id,a])).values()];
   app.activityCache.set(cacheKey,unique);
   return unique;
+}
+
+// Only fetch private activity details through the authenticated, user-restricted Edge Function.
+// In-memory cache avoids repeated detail calls when regenerating a proposal in one session.
+async function fetchActivityDetailForPlanning(id) {
+  const key=String(id);
+  const cached=app.detailCache.get(key);
+  if(cached && Date.now()-cached.at<10*60*1000)return cached.activity;
+  const {data,error}=await supabase.functions.invoke('intervals-read',{
+    body:{action:'get-activity-details',activityId:id}
+  });
+  if(error)throw new Error('Ophalen van Intervals.icu-activiteitsdetails mislukt.');
+  if(!data?.activity || typeof data.activity!=='object')throw new Error('Geen geldige activiteitsdetails.');
+  app.detailCache.set(key,{at:Date.now(),activity:data.activity});
+  return data.activity;
+}
+
+async function adaptivePolicyForWeek(records,weekStart,todayKey){
+  const details=[];
+  const unknownDates=[];
+  // Do not silently use a partly fetched subset to claim complete intensity coverage.
+  const bounded=records.filter(a=>a.date>=weekStart&&a.date<=todayKey);
+  if(bounded.length>16){
+    return {maxNewQuality:0,blockedQualityDates:weekDates(weekStart),
+      remarks:['Meer dan 16 activiteiten deze week: automatische intensieve voorstellen uit voorzorg uitgeschakeld.']};
+  }
+  for(const record of bounded){
+    if(record.id===null || record.id===undefined){unknownDates.push(record.date);continue;}
+    try {
+      const detail=await fetchActivityDetailForPlanning(record.id);
+      // Date is derived from server-returned details, not from the title.
+      if(!String(detail.start_date_local||'').startsWith(record.date)){
+        unknownDates.push(record.date);
+      } else details.push(detail);
+    } catch { unknownDates.push(record.date); }
+  }
+  const report=buildPrivacySafeReport(details,{start:weekStart,end:todayKey});
+  return deriveAdaptiveWeekPolicy({reportActivities:report.activities,unknownDates,weekStart,today:todayKey});
 }
 
 // DASHBOARD -------------------------------------------------------
@@ -342,12 +381,9 @@ async function proposeWeek(){
         const progress=remainingWeekLoad(week.targetLoad,records,weekStart,now);
         completedLoad=progress.completedLoad;
         occupiedDates=progress.occupiedDates;
-        stimulus=analyzeCompletedStimulus(records,weekStart,now);
-        if(stimulus.qualityCount){
-          warnings.push(`Week ${weekNumber(weekStart)}: ${stimulus.qualityCount} reeds uitgevoerde kwaliteitsprikkel(s) herkend aan de activiteitstitel.`);
-        }
-        if(stimulus.unknownCount){
-          warnings.push(`Week ${weekNumber(weekStart)}: ${stimulus.unknownCount} activiteit(en) met onbekende intensiteit; maximaal één nieuwe intensieve training en geen intensieve training direct naast die activiteit.`);
+        stimulus=await adaptivePolicyForWeek(records,weekStart,now);
+        for(const remark of stimulus.remarks){
+          warnings.push(`Week ${weekNumber(weekStart)}: ${remark}`);
         }
         if(progress.missingLoadCount){
           warnings.push(`Week ${weekNumber(weekStart)}: ${progress.missingLoadCount} uitgevoerde activiteit(en) zonder trainingsload. Restdoel onbekend; geen automatisch voorstel voor deze week.`);
@@ -372,7 +408,8 @@ async function proposeWeek(){
         week:{...week,targetLoad:Math.max(1,remainingTarget),phase:week.phase==='Recovery'?'Herstel':'Opbouw'},
         availabilityByDate:usable,
         maxQualitySessions: stimulus ? stimulus.maxNewQuality : 2,
-        blockedQualityDates: stimulus ? stimulus.blockedQualityDates : []
+        blockedQualityDates: stimulus ? stimulus.blockedQualityDates : [],
+        qualityTypes: stimulus ? stimulus.qualityTypes : ['vo2max','threshold']
       });
       const suggestions=result.sessions
         .filter(s=>s.date>=now && !occupiedDates.includes(s.date))
@@ -612,7 +649,7 @@ function handleActions(event){
 function registerListeners(){
   for(const button of document.querySelectorAll('[data-tab]'))button.addEventListener('click',()=>setTab(button.dataset.tab));
   $('l39-settings-link').addEventListener('click',()=>setTab('settings'));
-  $('l39-dashboard-refresh').addEventListener('click',()=>{app.activityCache.clear();app.availability.clear();loadDashboard()});
+  $('l39-dashboard-refresh').addEventListener('click',()=>{app.activityCache.clear();app.detailCache.clear();app.availability.clear();loadDashboard()});
   $('l39-month-prev').addEventListener('click',()=>{app.month=new Date(app.month.getFullYear(),app.month.getMonth()-1,1);loadCalendar()});
   $('l39-month-next').addEventListener('click',()=>{app.month=new Date(app.month.getFullYear(),app.month.getMonth()+1,1);loadCalendar()});
   $('l39-month-today').addEventListener('click',()=>{app.month=new Date(today().getFullYear(),today().getMonth(),1);loadCalendar()});

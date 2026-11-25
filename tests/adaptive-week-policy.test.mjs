@@ -1,0 +1,25 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { deriveAdaptiveWeekPolicy as derive } from '../adaptive-week-policy.js';
+const opts={weekStart:'2026-11-23',today:'2026-11-25'};
+const power=(date,intervalSummary=[],z5=1,z3=2)=>({date,load:60,strainScore:80,zonesStatus:'complete',zMinutes:{Z1:20,Z2:40,Z3:z3,Z4:2,Z5:z5,Z6:1,Z7:1},intervalSummary,intervalsTruncated:false});
+const hr=(date)=>({date,load:83,zonesStatus:'missing',hrZoneMinutes:[10,25,15,2],intervalSummary:[]});
+const policy=(a=[],unknownDates=[])=>derive({...opts,reportActivities:a,unknownDates});
+test('no activities allows up to two planned quality sessions',()=>assert.equal(policy().maxNewQuality,2));
+test('repeated threshold intervals count as quality-like signal',()=>assert.equal(policy([power('2026-11-24',[{durationMin:8,intensity:100},{durationMin:8,intensity:100}])]).maxNewQuality,1));
+test('repeated VO2 intervals count as quality-like signal',()=>assert.equal(policy([power('2026-11-24',[{durationMin:3,intensity:115},{durationMin:3,intensity:115}])]).maxNewQuality,1));
+test('one short sprint is not a certified quality workout',()=>{const p=policy([power('2026-11-24',[{durationMin:.2,intensity:220}])]);assert.equal(p.qualityDates.length,0);assert.equal(p.maxNewQuality,1)});
+test('unknown heart-rate session consumes a conservative slot',()=>{const p=policy([hr('2026-11-24')]);assert.equal(p.maxNewQuality,1);assert.ok(p.remarks.some(r=>r.includes('Hartslag')))});
+test('two unknown sessions disable additional automatic quality sessions',()=>assert.equal(policy([hr('2026-11-24'),hr('2026-11-25')]).maxNewQuality,0));
+test('one quality and one unknown disable further quality sessions',()=>assert.equal(policy([power('2026-11-24',[{durationMin:8,intensity:100},{durationMin:8,intensity:100}]),hr('2026-11-25')]).maxNewQuality,0));
+test('missing detail is never mistaken for endurance',()=>assert.equal(policy([],['2026-11-24']).maxNewQuality,1));
+test('future dates are excluded',()=>assert.equal(policy([],['2026-11-28']).maxNewQuality,2));
+test('previous week dates are excluded',()=>assert.equal(policy([],['2026-11-22']).maxNewQuality,2));
+test('quality day blocks immediate neighbours',()=>assert.deepEqual(policy([power('2026-11-24',[{durationMin:8,intensity:100},{durationMin:8,intensity:100}])]).blockedQualityDates,['2026-11-23','2026-11-24','2026-11-25']));
+test('moderate power exposure does not prove threshold intervals',()=>{const p=policy([power('2026-11-24',[],1,25)]);assert.equal(p.qualityDates.length,0);assert.equal(p.maxNewQuality,1)});
+test('easy power session does not consume quality slot',()=>assert.equal(policy([power('2026-11-24')]).maxNewQuality,2));
+test('invalid dates rejected',()=>assert.throws(()=>derive({weekStart:'oops',today:'2026-11-25'})));
+test('duplicate uncertain dates count once',()=>assert.equal(policy([],['2026-11-24','2026-11-24']).maxNewQuality,1));
+
+test('after a VO2-like workout threshold becomes first quality proposal',()=>{const p=policy([power('2026-11-24',[{durationMin:3,intensity:115},{durationMin:3,intensity:115}])]);assert.equal(p.qualityTypes[0],'threshold')});
+test('uncertain session prioritizes moderate threshold over VO2',()=>assert.equal(policy([hr('2026-11-24')]).qualityTypes[0],'threshold'));
