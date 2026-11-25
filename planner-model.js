@@ -127,10 +127,10 @@ export function effectivePlanWeek(plan, start, currentWeekStart) {
 
 export function validSession(session,dates) {
   if(!session||!dates.includes(session.date))return false;
-  return ['endurance','threshold','vo2max','group'].includes(session.type)&&Number.isInteger(session.durationMinutes)&&session.durationMinutes>=15&&session.durationMinutes<=360;
+  return ['endurance','threshold','vo2max','group','force','skills','anaerobic','power'].includes(session.type)&&Number.isInteger(session.durationMinutes)&&session.durationMinutes>=15&&session.durationMinutes<=360;
 }
 export function typeLabel(type) {
-  return {endurance:'Duur Z2',threshold:'Threshold',vo2max:'VO₂max',group:'Groepsrit'}[type]??'Training';
+  return {endurance:'Duur Z2',threshold:'Threshold',vo2max:'VO₂max',group:'Groepsrit',force:'Krachtgericht',skills:'Souplesse',anaerobic:'Anaerobe intervallen',power:'Sprint power'}[type]??'Training';
 }
 export function sumKnownLoads(items) {
   let total=0,missing=0;

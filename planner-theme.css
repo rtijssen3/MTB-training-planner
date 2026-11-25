@@ -51,3 +51,5 @@ html{background:var(--bg)}body.l39-body{margin:0!important;background:var(--bg)!
 [data-theme=light] .l39-phase-tag{color:#246e42}
 [data-theme=light] .l39-status.is-error{color:#a22235}
 [data-theme=light] .l39-status.is-good{color:#226e40}
+
+.skill-row{display:grid;grid-template-columns:minmax(120px,1fr) minmax(70px,1fr) 40px;gap:12px;align-items:center;padding:6px 0;font-size:13px}.skill-row meter{width:100%;accent-color:var(--accent)}.skill-row strong{text-align:right;color:var(--muted)}
