@@ -113,3 +113,8 @@ export async function fetchIntervalsWellness(
 
   return data.wellness;
 }
+
+export async function exportIntervalsWorkout({date,title,description}){
+ const data=await invokeIntervals({action:'export-workout',date,title,description});
+ if(data?.exported!==true||data?.id==null)throw Error('Export niet bevestigd; controleer Intervals.icu voordat je opnieuw probeert.');return data;
+}

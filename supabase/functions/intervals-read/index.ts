@@ -5,6 +5,9 @@ type ActionRequest = {
   oldest?: string;
   newest?: string;
   activityId?: string | number;
+  date?: string;
+  title?: string;
+  description?: string;
 };
 
 type JsonObject = Record<string, unknown>;
@@ -184,6 +187,27 @@ export default {
       return errorResponse('Invalid JSON', 400);
     }
 
+    if(body.action==='export-workout'){
+      if(!validDate(body.date)||typeof body.title!=='string'||body.title.length<1||body.title.length>100||
+        typeof body.description!=='string'||body.description.length>8000||
+        !body.description.split('\n').every(line=>/^- [1-9][0-9]{0,4}[ms] (?:[0-9]|[1-9][0-9]|1[0-9]{2}|200)(?:\.[0-9]+)?%$/.test(line)))return errorResponse('Ongeldige workout.',400);
+      const now=new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Amsterdam',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+      if(body.date<now)return errorResponse('Geen export van verstreken dagen.',400);
+      const marker='mtb-planner-v1-'+body.date;
+      const headers={Authorization:'Basic '+btoa('API_KEY:'+apiKey),'Content-Type':'application/json',Accept:'application/json'};
+      try{
+        const existing=await intervalsGet('/athlete/0/events?oldest='+body.date+'&newest='+body.date,apiKey);
+        if(!existing.ok)return errorResponse('Bestaande kalender kon niet worden gecontroleerd.',502);
+        const list=await existing.json();
+        if(!Array.isArray(list))return errorResponse('Onverwacht kalenderantwoord.',502);
+        if(list.some(e=>e?.external_id===marker||String(e?.name??'').startsWith('MTB Planner · ')))return errorResponse('Er staat al een workout van de planner op deze datum. Pas die aan in Intervals.icu; geen tweede export uitgevoerd.',409);
+        const response=await fetch('https://intervals.icu/api/v1/athlete/0/events',{method:'POST',headers,body:JSON.stringify({category:'WORKOUT',type:'Ride',start_date_local:body.date+'T00:00:00',name:'MTB Planner · '+body.title,description:body.description,external_id:marker}),signal:AbortSignal.timeout(15000)});
+        if(!response.ok)return errorResponse('Export niet bevestigd. Controleer Intervals.icu voordat je opnieuw probeert.',502);
+        const created=await response.json();
+        if(created?.id==null)return errorResponse('Export niet bevestigd. Controleer de kalender.',502);
+        return Response.json({exported:true,id:created.id});
+      }catch{return errorResponse('Export niet bevestigd. Controleer Intervals.icu voordat je opnieuw probeert.',502);}
+    }
     const allowedActions = [
       'test-connection',
       'list-activities',

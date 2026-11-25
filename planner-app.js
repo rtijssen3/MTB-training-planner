@@ -1,3 +1,6 @@
+import {workoutText} from './src/workouts/export.js';
+import {createCloudSync} from './src/data/cloud-sync.js';
+import {readSnapshot} from './src/data/planner-snapshot.js';
 import {normalizePlannerAvailability,isGroupRide,fixedGroupDates,refreshFocus} from './src/core/planner-adapters.js';
 import {priorities,analyzeExposure,recalculateExposure,qualityOrder,skillWorkout,proposeSkillWeek} from './src/engine/friel.js';
 import { raceWeekCount } from './src/engine/event-plan.js';
@@ -5,7 +8,7 @@ import { raceWeekCount } from './src/engine/event-plan.js';
 // Trainingsplannen en workoutconcepten blijven lokaal; uitgevoerde activiteiten komen uit Intervals.icu.
 import { supabase } from './supabase-client.js';
 import { initializeAvailability } from './availability-service.js';
-import { fetchIntervalsActivities, fetchIntervalsWellness, testIntervalsConnection } from './intervals-api.js';
+import { fetchIntervalsActivities, fetchIntervalsWellness, testIntervalsConnection, exportIntervalsWorkout } from './intervals-api.js';
 import { normalizeActivity } from './intervals-model.js';
 import { createStructuredWorkout } from './workout-details-model.js';
 import { estimateWorkoutTss } from './workout-load-model.js';
@@ -30,14 +33,14 @@ const PLAN_PREFIX='mtb-mesocycle:v2:';
 const WORKOUT_PREFIX='mtb-workout-draft:v1:';
 const localAvailabilityPrefix='mtb-availability-local:v1:';
 
-const app={userId:null,plan:null,month:new Date(today().getFullYear(),today().getMonth(),1),focusedWeek:null,
+const app={cloud:null,cloudBusy:false,userId:null,plan:null,month:new Date(today().getFullYear(),today().getMonth(),1),focusedWeek:null,
   availability:new Map(),activityCache:new Map(),wellness:null,activeTab:'dashboard',
   weekModal:null,workoutModal:null,renderNumber:0,authGeneration:0,activityError:null,planDirty:false,proposing:false,detailCache:new Map()};
 
 function status(id,message,kind='') {const el=$(id);if(!el)return;el.textContent=message;el.classList.toggle('is-error',kind==='error');el.classList.toggle('is-good',kind==='good');}
 function htmlNode(tag,cls,text){const el=document.createElement(tag);if(cls)el.className=cls;if(text!==undefined)el.textContent=String(text);return el;}
 function add(parent,tag,cls,text){const node=htmlNode(tag,cls,text);parent.appendChild(node);return node;}
-function cleanUser(){app.userId=null;app.plan=null;app.planDirty=false;app.activityCache.clear();app.detailCache.clear();app.availability.clear();app.wellness=null;app.activityError=null;app.authGeneration++;$('l39-dashboard-body').hidden=true;$('l39-calendar-grid').replaceChildren();$('l39-two-weeks').replaceChildren();$('l39-timeline').replaceChildren();for(const d of document.querySelectorAll('dialog[open]'))d.close();}
+function cleanUser(){app.cloud=null;app.cloudBusy=false;app.userId=null;app.plan=null;app.planDirty=false;app.activityCache.clear();app.detailCache.clear();app.availability.clear();app.wellness=null;app.activityError=null;app.authGeneration++;$('l39-dashboard-body').hidden=true;$('l39-calendar-grid').replaceChildren();$('l39-two-weeks').replaceChildren();$('l39-timeline').replaceChildren();for(const d of document.querySelectorAll('dialog[open]'))d.close();}
 function getPlanKey(){return PLAN_PREFIX+app.userId;}
 function getWorkoutKey(start){return `${WORKOUT_PREFIX}${app.userId}:${start}`;}
 function getOverrideKey(){return localAvailabilityPrefix+app.userId;}
@@ -505,6 +508,7 @@ async function proposeWeek(){
     const preview=prepared.map(item=>`Week ${weekNumber(item.start)}:\n`+(item.suggestions.length?item.suggestions.map(s=>`${s.date}: ${s.group?'Groepsrit':typeLabel(s.type)} · ${s.durationMinutes} min`).join('\n'):'Geen aanvullende trainingen')).join('\n\n');
     if(!window.confirm(`${preview}\n\n${replacing.length?'Bestaande toekomstige trainingen worden vervangen. ':''}Voorstel bevestigen?`))return;
     for(const item of prepared)storeSessions(item.start,item.merged);
+    syncPlanner({automatic:true});
     const count=prepared.reduce((sum,item)=>sum+item.suggestions.length,0);
     const current=prepared.find(item=>item.start===currentWeek);
     const detail=current?` Huidige week: ${current.completedLoad} load uitgevoerd, ${current.remainingTarget} load resterend vóór het voorstel.`:'';
@@ -531,11 +535,27 @@ function generatePlan(event){
     status('l39-plan-status','Concept gegenereerd maar nog niet opgeslagen. Klik op Bewaar mesocycle.','good');
   }catch(e){status('l39-plan-status',e.message,'error')}
 }
+function cloudEnabled(){return !!app.userId&&localStorage.getItem('mtb-cloud-enabled:'+app.userId)==='1';}
+async function syncPlanner({automatic=false,resolveConflict=null}={}){
+  if(!app.cloud||app.cloudBusy||automatic&&!cloudEnabled())return;
+  if(app.planDirty&&!automatic){status('l39-cloud-status','Bewaar eerst je mesocycle.','error');return;}
+  if(automatic&&app.planDirty)return;
+  const generation=app.authGeneration,client=app.cloud;
+  app.cloudBusy=true;status('l39-cloud-status','Synchroniseren…');
+  for(const id of ['l39-cloud-sync','l39-cloud-local','l39-cloud-remote'])$(id).disabled=true;
+  try{
+    const result=await client.sync({allowDownload:!automatic,resolveConflict});
+    if(generation!==app.authGeneration)return;
+    if(result==='download'){app.plan=readPlan();app.planDirty=false;fillPlanForm(app.plan);setTab(app.activeTab);}
+    status('l39-cloud-status',({upload:'Cloudopslag bevestigd.',download:'Cloudversie opgehaald. Lokale back-up behouden.',same:'Lokaal en cloud zijn gelijk.',nothing:'Nog geen opgeslagen gegevens.'})[result],'good');
+  }catch(e){if(generation===app.authGeneration){status('l39-cloud-status',e.message,'error');if(automatic)status('l39-plan-status','Lokaal opgeslagen; cloud niet bevestigd: '+e.message,'error');}}
+  finally{if(generation===app.authGeneration){app.cloudBusy=false;for(const id of ['l39-cloud-sync','l39-cloud-local','l39-cloud-remote'])$(id).disabled=false;}}
+}
 function savePlan(){
   if(!app.plan||!app.userId){status('l39-plan-status','Genereer eerst een plan.','error');return}
   localStorage.setItem(getPlanKey(),JSON.stringify(app.plan));
   app.planDirty=false;
-  status('l39-plan-status','Mesocycle lokaal bewaard. Nog niet naar Supabase of Intervals.icu verzonden.','good');
+  status('l39-plan-status','Mesocycle lokaal bewaard.','good');syncPlanner({automatic:true});
 }
 
 // MODAL: WEEK AVAILABILITY --------------------------------------
@@ -687,10 +707,18 @@ async function saveWorkout(event){
   }
   const all=sessions(start).filter(x=>x.date!==date);
   if(s.type!=='rest')all.push({...s,type:s.type==='group'?'endurance':s.type,group:s.type==='group'});
-  storeSessions(start,all);$('l39-workout-dialog').close();
+  storeSessions(start,all);$('l39-workout-dialog').close();syncPlanner({automatic:true});
   if(app.activeTab==='calendar')loadCalendar();else if(app.activeTab==='dashboard')loadDashboard();else renderTwoWeeks();
   const feedback=app.activeTab==='dashboard'?'l39-dashboard-status':app.activeTab==='calendar'?'l39-calendar-status':'l39-plan-status';
   status(feedback,'Training lokaal opgeslagen. Intervals.icu is niet gewijzigd.','good');
+}
+async function exportWorkout(){
+  const b=$('l39-export-workout');if(b.disabled)return;
+  try{const {s,info}=previewWorkoutResult();const saved=getSession(s.date);if(!info?.workout||!saved||saved.group||saved.type!==s.type||saved.durationMinutes!==s.durationMinutes||(saved.protocol||'classic')!==s.protocol)throw Error('Bewaar de gestructureerde training eerst en open hem opnieuw.');
+    if(s.date<nowKey())throw Error('Geen export van verstreken dagen.');
+    if(!confirm('Exporteer '+info.workout.title+' op '+s.date+' naar je echte Intervals.icu-kalender?'))return;
+    b.disabled=true;status('l39-workout-modal-status','Exporteren…');const result=await exportIntervalsWorkout({date:s.date,title:info.workout.title,description:workoutText(info.workout)});status('l39-workout-modal-status','Export bevestigd · event '+result.id,'good');
+  }catch(e){status('l39-workout-modal-status',e.message,'error');}finally{b.disabled=false;}
 }
 async function copyWorkout(){
   try{const {info}=previewWorkoutResult();if(!info?.workout)throw new Error('Geen gestructureerde workout om te kopiëren.');
@@ -737,7 +765,13 @@ function registerListeners(){
   $('l39-week-form').addEventListener('submit',saveAvailability);
   $('l39-workout-form').addEventListener('submit',saveWorkout);
   $('l39-copy-workout').addEventListener('click',copyWorkout);
+  $('l39-export-workout').addEventListener('click',exportWorkout);
   for(const id of ['l39-workout-type','l39-workout-duration','l39-workout-protocol'])$(id).addEventListener('input',renderWorkoutPreview);
+  $('l39-cloud-enabled').addEventListener('change',()=>{if(app.userId)localStorage.setItem('mtb-cloud-enabled:'+app.userId,$('l39-cloud-enabled').checked?'1':'0');});
+  $('l39-cloud-sync').addEventListener('click',()=>syncPlanner());
+  $('l39-cloud-local').addEventListener('click',()=>{if(confirm('Lokale versie als cloudversie bewaren? Alleen bij een conflict wordt de cloudversie vervangen.'))syncPlanner({resolveConflict:'local'});});
+  $('l39-cloud-remote').addEventListener('click',()=>{if(confirm('Cloudversie lokaal herstellen? Een lokale back-up wordt bewaard.'))syncPlanner({resolveConflict:'remote'});});
+  $('l39-cloud-backup').addEventListener('click',()=>{try{if(!app.userId)return;const blob=new Blob([JSON.stringify(readSnapshot(localStorage,app.userId),null,2)],{type:'application/json'});const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='mtb-planner-backup.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}catch(e){status('l39-cloud-status',e.message,'error');}});
   $('l39-test-connection').addEventListener('click',async()=>{
     status('l39-connection-status','Verbinding testen...');try{await testIntervalsConnection();status('l39-connection-status','Intervals.icu werkt.','good')}
     catch(e){status('l39-connection-status',e.message,'error')}
@@ -751,7 +785,7 @@ function registerListeners(){
 }
 function setSignedIn(user){
   if(app.userId===user.id)return;
-  cleanUser();app.userId=user.id;app.plan=readPlan();app.planDirty=false;app.focusedWeek=null;fillPlanForm(app.plan);
+  cleanUser();app.userId=user.id;const generation=app.authGeneration;app.cloud=createCloudSync({supabase,storage:localStorage,user:user.id,isCurrent:()=>generation===app.authGeneration});$('l39-cloud-enabled').checked=cloudEnabled();status('l39-cloud-status','');app.plan=readPlan();app.planDirty=false;app.focusedWeek=null;fillPlanForm(app.plan);
   const tab=location.hash.slice(1);setTab(['dashboard','calendar','plan'].includes(tab)?tab:'dashboard');
 }
 async function initialize(){
