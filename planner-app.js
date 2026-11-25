@@ -1,3 +1,4 @@
+import {TYPES as FEEDBACK_TYPES,evaluateExecution,recommendLevel,selectRecentSessions} from './src/engine/workout-feedback.js';
 import {formatIntensityMinutes,summarizePlannedLoads,manualWorkoutValidation} from './src/core/workout-display.js';
 import {workoutText} from './src/workouts/export.js';
 import {createCloudSync} from './src/data/cloud-sync.js';
@@ -34,14 +35,14 @@ const PLAN_PREFIX='mtb-mesocycle:v2:';
 const WORKOUT_PREFIX='mtb-workout-draft:v1:';
 const localAvailabilityPrefix='mtb-availability-local:v1:';
 
-const app={cloud:null,cloudBusy:false,userId:null,plan:null,month:new Date(today().getFullYear(),today().getMonth(),1),focusedWeek:null,
+const app={feedbackRows:[],feedbackStatus:'',feedbackBusy:false,cloud:null,cloudBusy:false,userId:null,plan:null,month:new Date(today().getFullYear(),today().getMonth(),1),focusedWeek:null,
   availability:new Map(),activityCache:new Map(),wellness:null,activeTab:'dashboard',
   weekModal:null,workoutModal:null,renderNumber:0,authGeneration:0,activityError:null,planDirty:false,proposing:false,detailCache:new Map()};
 
 function status(id,message,kind='') {const el=$(id);if(!el)return;el.textContent=message;el.classList.toggle('is-error',kind==='error');el.classList.toggle('is-good',kind==='good');}
 function htmlNode(tag,cls,text){const el=document.createElement(tag);if(cls)el.className=cls;if(text!==undefined)el.textContent=String(text);return el;}
 function add(parent,tag,cls,text){const node=htmlNode(tag,cls,text);parent.appendChild(node);return node;}
-function cleanUser(){app.cloud=null;app.cloudBusy=false;app.userId=null;app.plan=null;app.planDirty=false;app.activityCache.clear();app.detailCache.clear();app.availability.clear();app.wellness=null;app.activityError=null;app.authGeneration++;$('l39-dashboard-body').hidden=true;$('l39-calendar-grid').replaceChildren();$('l39-two-weeks').replaceChildren();$('l39-timeline').replaceChildren();for(const d of document.querySelectorAll('dialog[open]'))d.close();}
+function cleanUser(){app.feedbackRows=[];app.feedbackStatus='';app.feedbackBusy=false;app.cloud=null;app.cloudBusy=false;app.userId=null;app.plan=null;app.planDirty=false;app.activityCache.clear();app.detailCache.clear();app.availability.clear();app.wellness=null;app.activityError=null;app.authGeneration++;$('l39-dashboard-body').hidden=true;$('l39-calendar-grid').replaceChildren();$('l39-two-weeks').replaceChildren();$('l39-timeline').replaceChildren();for(const d of document.querySelectorAll('dialog[open]'))d.close();}
 function getPlanKey(){return PLAN_PREFIX+app.userId;}
 function getWorkoutKey(start){return `${WORKOUT_PREFIX}${app.userId}:${start}`;}
 function getOverrideKey(){return localAvailabilityPrefix+app.userId;}
@@ -298,7 +299,7 @@ async function analyzeLimiterHistory(){
   finally{button.disabled=false;}
 }
 function renderTimeline(){
-  const host=$('l39-timeline');host.replaceChildren();renderSkillPanel();
+  const host=$('l39-timeline');host.replaceChildren();renderSkillPanel();renderFeedbackPanel();
   if(!app.plan){add(host,'p','l39-caption','Nog geen trainingsplan. Vul bovenaan je uitgangspunten in en genereer een concept.');$('l39-timeline-summary').textContent='Nog geen plan';return;}
   const weeks=app.plan.weeks;const max=Math.max(1,...weeks.map(w=>w.targetLoad));
   $('l39-timeline-summary').textContent=`${weeks.length} weken · ${prettyDate(weeks[0].start)} – ${prettyDate(weeks.at(-1).end)}`;
@@ -311,7 +312,67 @@ function renderTimeline(){
     add(button,'small','',`W${w.week}`);add(button,'small','',w.phase==='Recovery'?'Herstel':'N'+progressionLevel(app.plan,w));button.title=`${w.phase} • week ${weekNumber(w.start)} • ${w.targetLoad} load • ${w.phase==='Recovery'?'herstel':'niveau '+progressionLevel(app.plan,w)}`;
   }
 }
-async function loadPlan(){if(!app.userId)return;renderTimeline();await renderTwoWeeks()}
+async function loadPlan(){if(!app.userId)return;renderTimeline();renderFeedbackPanel();await renderTwoWeeks()}
+function renderFeedbackPanel(){
+  const host=$('l39-feedback-list');host.replaceChildren();
+  const {week}=effectivePlanWeek(app.plan,weekWindowStart(),weekStartOf(today()));
+  const planned=progressionLevel(app.plan,week);
+  $('l39-feedback-status').textContent=app.feedbackStatus||'Analyseer de laatste 28 dagen. Alleen eerdere bewaarde interval-/techniektrainingen worden vergeleken.';
+  if(!app.feedbackRows.length)return;
+  const summary=add(host,'div','feedback-summary');
+  for(const type of FEEDBACK_TYPES){
+    const advice=recommendLevel(type,planned,app.feedbackRows,nowKey());
+    const row=add(summary,'div','feedback-advice');add(row,'strong','',typeLabel(type));add(row,'span','','N'+advice.level+' · '+({start:'start',hold:'handhaven',increase:'verhogen',reduce:'verlagen'})[advice.decision]);add(row,'small','',advice.reason);
+  }
+  const list=add(host,'div','feedback-history');
+  for(const entry of app.feedbackRows){
+    const row=add(list,'div','feedback-history-row'),left=add(row,'div');
+    add(left,'strong','',prettyDate(entry.date)+' · '+typeLabel(entry.type)+(entry.level?' · N'+entry.level:' · standaard'));
+    add(left,'small','',entry.required?entry.matched+'/'+entry.required+' intervallen · '+entry.reason:entry.reason);
+    const label=add(row,'label','','Eigen beoordeling');const select=add(label,'select');select.setAttribute('aria-label','Beoordeling '+entry.date);
+    for(const [value,name] of [['','Niet beoordeeld'],['good','Goed uitgevoerd en hersteld'],['hard','Te zwaar / onvoldoende hersteld'],['neutral','Niet goed te beoordelen']]){const o=add(select,'option','',name);o.value=value;}
+    select.value=entry.rating||'';
+    select.addEventListener('change',()=>saveFeedback(entry.date,select.value));
+  }
+}
+async function refreshWorkoutFeedback({activities=null}={}){
+  const generation=app.authGeneration;
+  if(!app.userId)throw Error('Niet ingelogd.');
+  const end=dateKey(addDays(today(),-1)),start=dateKey(addDays(today(),-28));
+  const weeks=[];for(let d=monday(parseDate(start));dateKey(d)<=end;d=addDays(d,7))weeks.push(sessions(dateKey(d)));
+  const recent=selectRecentSessions(weeks,start,end);
+  const records=activities??await getActivitiesRange(start,end,{force:true});
+  if(generation!==app.authGeneration)throw Error('Account gewijzigd.');
+  const cycling=records.filter(a=>['Ride','MountainBikeRide','GravelRide','VirtualRide'].includes(a.sport)&&a.date>=start&&a.date<=end);
+  const rows=[];
+  for(const s of recent){
+    const rides=cycling.filter(a=>a.date===s.date);
+    let detail=null;
+    if(rides.length===1&&['threshold','vo2max','anaerobic','power'].includes(s.type))try{detail=await fetchActivityDetailForPlanning(rides[0].id);}catch{}
+    if(generation!==app.authGeneration)throw Error('Account gewijzigd.');
+    const w=weekFor(app.plan,weekStartOf(parseDate(s.date)));
+    rows.push(evaluateExecution(s,workoutInfo(s,w).workout,rides,detail));
+  }
+  app.feedbackRows=rows;
+  app.feedbackStatus=rows.length?rows.length+' eerdere trainingen vergeleken. Advies blijft afhankelijk van eigen herstelbeoordeling.':'Geen bewaarde vergelijkbare trainingen uit de afgelopen 28 dagen.';
+  renderFeedbackPanel();
+  return rows;
+}
+async function analyzeWorkoutFeedback(){
+  if(app.feedbackBusy||!app.userId)return;
+  const gen=app.authGeneration;app.feedbackBusy=true;const button=$('l39-analyze-feedback');button.disabled=true;status('l39-feedback-status','Trainingshistorie ophalen…');
+  try{await refreshWorkoutFeedback();}catch(e){if(gen===app.authGeneration){app.feedbackRows=[];app.feedbackStatus='Analyse niet beschikbaar: '+e.message;renderFeedbackPanel();}}
+  finally{if(gen===app.authGeneration){app.feedbackBusy=false;button.disabled=false;}}
+}
+function saveFeedback(date,value){
+  if(!app.userId||date>=nowKey()||!['','good','hard','neutral'].includes(value))return;
+  const start=weekStartOf(parseDate(date)),items=sessions(start),session=items.find(s=>s.date===date);
+  if(!session)return;
+  if(value)session.feedback=value;else delete session.feedback;
+  storeSessions(start,items);
+  const entry=app.feedbackRows.find(r=>r.date===date);if(entry)entry.rating=value||null;
+  renderFeedbackPanel();syncPlanner({automatic:true});
+}
 function weekWindowStart(){return app.focusedWeek||weekStartOf(today());}
 async function renderTwoWeeks(){
   if(!app.userId)return;
@@ -365,7 +426,8 @@ function renderWeekCard(host,start,availability){
   if(!info.items.length)add(totals,'small','','Nog geen workouts gepland');
 }
 async function proposeWeek(){
-  if(!app.userId || app.proposing)return;
+  if(!app.userId || app.proposing || app.feedbackBusy)return;
+  const generation=app.authGeneration;
   if(!app.plan){
     status('l39-plan-status','Genereer eerst een mesocycle.','error');
     return;
@@ -381,6 +443,10 @@ async function proposeWeek(){
     const warnings=[];
     const now=nowKey();
     const currentWeek=weekStartOf(today());
+    const activePlan=app.plan;
+    let feedback=[];
+    try{feedback=await refreshWorkoutFeedback();}catch(e){app.feedbackRows=[];app.feedbackStatus='Historie niet beschikbaar: '+e.message;renderFeedbackPanel();warnings.push('Geen actuele workoutfeedback; nieuwe niveaus blijven op N1.');}
+    if(generation!==app.authGeneration||activePlan!==app.plan)return;
     // De periode eindigt vóór de huidige week; zo gebruiken we geen halfgevulde
     // weken voor een trend. Een mislukte historievraag blokkeert de planner niet.
     let historicalActivities=null;
@@ -473,7 +539,9 @@ async function proposeWeek(){
       const seen=[];
       if(stimulus?.classes?.some(c=>c.indicators.includes('repeated-vo2-like-intervals-observed')))seen.push('vo2max');
       if(stimulus?.classes?.some(c=>c.indicators.includes('repeated-threshold-like-intervals-observed')))seen.push('threshold');
-      const level=progressionLevel(app.plan,week);
+      const plannedLevel=progressionLevel(app.plan,week);
+      const levels=Object.fromEntries(FEEDBACK_TYPES.map(type=>[type,recommendLevel(type,plannedLevel,feedback,now)]));
+      const levelFor=type=>levels[type]?.level??1;
       const dates=weekDates(weekStart);
       const prevStart=dateKey(addDays(parseDate(weekStart),-7)),nextStart=dateKey(addDays(parseDate(weekStart),7));
       const prev=prepared.find(item=>item.start===prevStart)?.merged??sessions(prevStart);
@@ -484,12 +552,12 @@ async function proposeWeek(){
         maxQuality:groupOnly?0:phasePolicy.maxQualitySessions,blocked:[...new Set([...phasePolicy.blockedQualityDates,...boundary])],
         qualityTypes:qualityOrder(app.plan.discipline,week.phase,app.plan.limiter,app.plan.limiterAnalysis,seen),phase:week.phase,
         fixed:groups,
-        loadFor:(type,durationMinutes)=>{const k=type+':'+durationMinutes;if(!estimates.has(k))estimates.set(k,workoutInfo(candidateSession(type,durationMinutes,level,week.phase),week).load??NaN);return estimates.get(k);}
+        loadFor:(type,durationMinutes)=>{const k=type+':'+durationMinutes;if(!estimates.has(k))estimates.set(k,workoutInfo(candidateSession(type,durationMinutes,levelFor(type),week.phase),week).load??NaN);return estimates.get(k);}
       });
       if(result.unknownFixed)warnings.push('Groepsrit behouden; onbekende load en herstel conservatief behandeld.');
       const suggestions=result.sessions
         .filter(s=>s.date>=now && !occupiedDates.includes(s.date))
-        .map(s=>({date:s.date,...candidateSession(s.type,s.durationMinutes,level,week.phase),group:!!s.group}));
+        .map(s=>({date:s.date,...candidateSession(s.type,s.durationMinutes,levelFor(s.type),week.phase),group:!!s.group}));
       if(!suggestions.length&&!groupOnly){
         warnings.push(`Week ${weekNumber(weekStart)}: geen passende trainingen mogelijk.`);
         continue;
@@ -500,15 +568,17 @@ async function proposeWeek(){
         // Behoud reeds uitgevoerde dagen, inclusief vandaag.
         merged:[...mergeFutureSessions(existing,suggestions,now),...preservedToday]
           .sort((a,b)=>a.date.localeCompare(b.date)),
-        completedLoad,remainingTarget});
+        completedLoad,remainingTarget,levels});
     }
     if(!prepared.length){
       status('l39-plan-status',warnings.join(' ')||'Geen resterende trainingsmomenten beschikbaar.','error');
       return;
     }
+    if(generation!==app.authGeneration||activePlan!==app.plan)return;
     const replacing=prepared.filter(item=>item.existing.some(s=>s.date>=now));
-    const preview=prepared.map(item=>`Week ${weekNumber(item.start)}:\n`+(item.suggestions.length?item.suggestions.map(s=>`${s.date}: ${s.group?'Groepsrit':typeLabel(s.type)} · ${s.durationMinutes} min${s.level?' · niveau '+s.level:''}`).join('\n'):'Geen aanvullende trainingen')).join('\n\n');
+    const preview=prepared.map(item=>`Week ${weekNumber(item.start)}:\n`+(item.suggestions.length?item.suggestions.map(s=>`${s.date}: ${s.group?'Groepsrit':typeLabel(s.type)} · ${s.durationMinutes} min${s.level?' · niveau '+s.level+' ('+item.levels[s.type].reason+')':''}`).join('\n'):'Geen aanvullende trainingen')).join('\n\n');
     if(!window.confirm(`${preview}\n\n${replacing.length?'Bestaande toekomstige trainingen worden vervangen. ':''}Voorstel bevestigen?`))return;
+    if(generation!==app.authGeneration||activePlan!==app.plan)return;
     for(const item of prepared)storeSessions(item.start,item.merged);
     syncPlanner({automatic:true});
     const count=prepared.reduce((sum,item)=>sum+item.suggestions.length,0);
@@ -771,6 +841,7 @@ function registerListeners(){
   $('l39-current-weeks').addEventListener('click',()=>{app.focusedWeek=null;renderTimeline();renderTwoWeeks()});
   $('l39-propose').addEventListener('click',proposeWeek);
   $('l39-analyze-limiters').addEventListener('click',analyzeLimiterHistory);
+  $('l39-analyze-feedback').addEventListener('click',analyzeWorkoutFeedback);
   for(const id of ['l39-discipline','l39-limiter'])$(id).addEventListener('change',updateSkillFocus);
   $('l39-week-form').addEventListener('submit',saveAvailability);
   $('l39-workout-form').addEventListener('submit',saveWorkout);

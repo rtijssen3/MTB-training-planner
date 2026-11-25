@@ -1,0 +1,18 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {evaluateExecution,recommendLevel,selectRecentSessions} from '../src/engine/workout-feedback.js';
+const rides=[{"id":"a"}],session={"date":"2026-11-20","type":"threshold","protocol":"progressive","level":2,"durationMinutes":60},workout={"steps":[{"kind":"work","seconds":480,"percentFtp":100},{"kind":"work","seconds":480,"percentFtp":100}]},detail={"id":"a","start_date_local":"2026-11-20T12:00:00","power_meter":true,"icu_ftp":280,"moving_time":3600,"icu_zone_times":[{"id":"Z1","secs":300},{"id":"Z2","secs":300},{"id":"Z3","secs":300},{"id":"Z4","secs":300},{"id":"Z5","secs":300},{"id":"Z6","secs":300},{"id":"Z7","secs":300}],"icu_intervals":[{"start_time":600,"end_time":1080,"moving_time":480,"average_watts":280},{"start_time":1260,"end_time":1740,"moving_time":480,"average_watts":280}]},latest={"date":"2026-11-20","type":"threshold","level":2,"evidence":"matched","rating":"good"},previous={"date":"2026-11-16","type":"threshold","level":2,"evidence":"matched","rating":null};
+test("matches separate work intervals",()=>assert.ok((()=>evaluateExecution(session,workout,rides,detail).evidence==='matched')()));
+test("overlap cannot count twice",()=>assert.ok((()=>evaluateExecution(session,workout,rides,{...detail,icu_intervals:[detail.icu_intervals[0],{...detail.icu_intervals[0]}]}).matched===1)()));
+test("heart rate alone insufficient",()=>assert.ok((()=>evaluateExecution(session,workout,rides,{...detail,power_meter:false}).evidence==='unknown')()));
+test("multiple rides ambiguous",()=>assert.ok((()=>evaluateExecution(session,workout,[...rides,{id:'b'}],detail).evidence==='unknown')()));
+test("missing power zones insufficient",()=>assert.ok((()=>evaluateExecution(session,workout,rides,{...detail,icu_zone_times:[]}).evidence==='unknown')()));
+test("truncation insufficient",()=>assert.ok((()=>evaluateExecution(session,workout,rides,{...detail,intervals_truncated:true}).evidence==='unknown')()));
+test("missing intervals not a failed workout",()=>assert.ok((()=>evaluateExecution(session,workout,rides,{...detail,icu_intervals:[]}).evidence==='partial')()));
+test("new athlete starts level one",()=>assert.ok((()=>recommendLevel('threshold',3,[],'2026-11-25').level===1)()));
+test("two successes with recovery confirmation permit one level",()=>assert.ok((()=>recommendLevel('threshold',3,[latest,previous],'2026-11-25').level===3)()));
+test("no recovery confirmation holds",()=>assert.ok((()=>recommendLevel('threshold',3,[{...latest,rating:null},previous],'2026-11-25').level===2)()));
+test("too hard lowers",()=>assert.ok((()=>recommendLevel('threshold',3,[{...latest,rating:'hard'},previous],'2026-11-25').level===1)()));
+test("phase cap wins",()=>assert.ok((()=>recommendLevel('threshold',1,[latest,previous],'2026-11-25').level===1)()));
+test("old history does not raise",()=>assert.ok((()=>recommendLevel('threshold',3,[latest,previous],'2026-12-20').level===1)()));
+test("future or current day ignored",()=>assert.ok((()=>recommendLevel('threshold',3,[{...latest,date:'2026-11-25'}],'2026-11-25').level===1)()));
+test("skill type not inferred from power",()=>assert.ok((()=>evaluateExecution({...session,type:'skills'},workout,rides,detail).evidence==='unknown')()));
+test("select only non-group recent sessions",()=>assert.ok((()=>selectRecentSessions([[session,{...session,date:'2026-11-21',group:true}]],'2026-11-01','2026-11-24').length===1)()));
