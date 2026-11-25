@@ -1,0 +1,2 @@
+import {defineConfig,devices} from '@playwright/test';
+export default defineConfig({testDir:'./tests/browser',fullyParallel:true,retries:0,timeout:30000,reporter:'list',use:{baseURL:'http://127.0.0.1:5173',timezoneId:'Europe/Amsterdam',trace:'retain-on-failure',...devices['Desktop Chrome']},webServer:{command:'npm run dev -- --host 127.0.0.1 --strictPort',url:'http://127.0.0.1:5173',reuseExistingServer:false,timeout:30000}});

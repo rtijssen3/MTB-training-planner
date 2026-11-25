@@ -1,3 +1,4 @@
+import {createLocalPlannerStore} from './src/data/local-planner-store.js';
 import {TYPES as FEEDBACK_TYPES,evaluateExecution,recommendLevel,selectRecentSessions} from './src/engine/workout-feedback.js';
 import {formatIntensityMinutes,summarizePlannedLoads,manualWorkoutValidation} from './src/core/workout-display.js';
 import {workoutText} from './src/workouts/export.js';
@@ -20,7 +21,7 @@ import { assessPeriodizationLoad, historyWindow } from './periodization-policy.j
 import { derivePhaseWorkoutPolicy } from './phase-focus-policy.js';
 import {
   WEEKDAYS,dateKey,parseDate,addDays,monday,weekDates,weekStartOf,weekNumber,
-  monthWeeks,intervalChunks,createMesocycle,migrateLegacyPlan,weekFor,effectivePlanWeek,typeLabel,sumKnownLoads,proposalAvailability,mergeFutureSessions,remainingWeekLoad
+  monthWeeks,intervalChunks,createMesocycle,weekFor,effectivePlanWeek,typeLabel,sumKnownLoads,proposalAvailability,mergeFutureSessions,remainingWeekLoad
 } from './planner-model.js';
 
 const $=id=>document.getElementById(id);
@@ -31,9 +32,6 @@ const prettyDate=key=>new Intl.DateTimeFormat('nl-NL',{day:'numeric',month:'shor
 const monthLabel=(y,m)=>new Intl.DateTimeFormat('nl-NL',{month:'long',year:'numeric'}).format(new Date(y,m,1));
 const nowKey=()=>dateKey(today());
 const fixedLabel=value=>{const t=String(value||'').trim();return isGroupRide(t)?'Groepsrit':t;};
-const PLAN_PREFIX='mtb-mesocycle:v2:';
-const WORKOUT_PREFIX='mtb-workout-draft:v1:';
-const localAvailabilityPrefix='mtb-availability-local:v1:';
 
 const app={feedbackRows:[],feedbackStatus:'',feedbackBusy:false,cloud:null,cloudBusy:false,userId:null,plan:null,month:new Date(today().getFullYear(),today().getMonth(),1),focusedWeek:null,
   availability:new Map(),activityCache:new Map(),wellness:null,activeTab:'dashboard',
@@ -42,29 +40,14 @@ const app={feedbackRows:[],feedbackStatus:'',feedbackBusy:false,cloud:null,cloud
 function status(id,message,kind='') {const el=$(id);if(!el)return;el.textContent=message;el.classList.toggle('is-error',kind==='error');el.classList.toggle('is-good',kind==='good');}
 function htmlNode(tag,cls,text){const el=document.createElement(tag);if(cls)el.className=cls;if(text!==undefined)el.textContent=String(text);return el;}
 function add(parent,tag,cls,text){const node=htmlNode(tag,cls,text);parent.appendChild(node);return node;}
-function cleanUser(){app.feedbackRows=[];app.feedbackStatus='';app.feedbackBusy=false;app.cloud=null;app.cloudBusy=false;app.userId=null;app.plan=null;app.planDirty=false;app.activityCache.clear();app.detailCache.clear();app.availability.clear();app.wellness=null;app.activityError=null;app.authGeneration++;$('l39-dashboard-body').hidden=true;$('l39-calendar-grid').replaceChildren();$('l39-two-weeks').replaceChildren();$('l39-timeline').replaceChildren();for(const d of document.querySelectorAll('dialog[open]'))d.close();}
-function getPlanKey(){return PLAN_PREFIX+app.userId;}
-function getWorkoutKey(start){return `${WORKOUT_PREFIX}${app.userId}:${start}`;}
-function getOverrideKey(){return localAvailabilityPrefix+app.userId;}
-function localAvailability(){try{return JSON.parse(localStorage.getItem(getOverrideKey())||'{}')}catch{return {}}}
-function setLocalAvailability(data){localStorage.setItem(getOverrideKey(),JSON.stringify(data))}
-function readPlan(){
-  try{const stored=localStorage.getItem(getPlanKey());if(stored){const plan=JSON.parse(stored);if(plan?.version===2&&Array.isArray(plan.weeks)&&plan.weeks.length)return plan;}}catch(e){console.warn('Plan kon niet worden ingelezen',e)}
-  // Concepten uit les 34 lezen, zonder ze te verwijderen of aan te passen.
-  const next=addDays(monday(today()),7);
-  try{const old=localStorage.getItem(`mtb-periodization-draft:v1:${app.userId}:${dateKey(next)}`);
-    if(old)return migrateLegacyPlan(JSON.parse(old));}catch(e){console.warn('Ouder trainingsblok ongeldig',e)}
-  return null;
-}
-function sessions(start){
-  try{const raw=JSON.parse(localStorage.getItem(getWorkoutKey(start))||'null');
-    if(!raw?.sessions||!Array.isArray(raw.sessions))return [];
-    return raw.sessions.filter(s=>s?.date&&['endurance','threshold','vo2max','force','skills','anaerobic','power'].includes(s.type)&&Number.isInteger(s.durationMinutes))
-      .map(s=>({...s,protocol:s.protocol||'classic'}));
-  }catch{return []}
-}
-function storeSessions(start,items){localStorage.setItem(getWorkoutKey(start),JSON.stringify({version:1,start,sessions:items}));}
-function getSession(date){return sessions(weekStartOf(parseDate(date))).find(s=>s.date===date)||null}
+function cleanUser(){app.weekModal=null;app.workoutModal=null;app.proposing=false;app.focusedWeek=null;app.feedbackRows=[];app.feedbackStatus='';app.feedbackBusy=false;app.cloud=null;app.cloudBusy=false;app.userId=null;app.plan=null;app.planDirty=false;app.activityCache.clear();app.detailCache.clear();app.availability.clear();app.wellness=null;app.activityError=null;app.authGeneration++;$('l39-dashboard-body').hidden=true;$('l39-calendar-grid').replaceChildren();$('l39-two-weeks').replaceChildren();$('l39-timeline').replaceChildren();$('l39-feedback-list').replaceChildren();$('l39-skill-priorities').replaceChildren();$('l39-feedback-status').textContent='';for(const d of document.querySelectorAll('dialog[open]'))d.close();}
+const store=()=>createLocalPlannerStore(localStorage,app.userId,today);
+function localAvailability(){return store().localAvailability();}
+function setLocalAvailability(data){store().setLocalAvailability(data);}
+function readPlan(){return store().readPlan();}
+function sessions(start){return store().sessions(start);}
+function storeSessions(start,items){store().storeSessions(start,items);}
+function getSession(date){return store().getSession(date);}
 function weekSessionStats(start){const week=effectivePlanWeek(app.plan,start,weekStartOf(today())).week;const items=sessions(start);
   const loads=new Map(items.map(s=>[s.date,workoutInfo(s,week).load]));
   return {...summarizePlannedLoads([...loads.values()],week?.targetLoad),items,loads};
@@ -88,7 +71,9 @@ function setTab(tab){
 async function availabilityForWeek(start,{force=false}={}){
   if(!app.userId)throw new Error('Je bent niet ingelogd.');
   if(!force&&app.availability.has(start))return app.availability.get(start);
-  const {state}=await initializeAvailability(app.userId,parseDate(start));
+  const generation=app.authGeneration,user=app.userId;
+  const {state}=await initializeAvailability(user,parseDate(start));
+  if(generation!==app.authGeneration)throw Error('Account gewijzigd.');
   if(!state||typeof state.getEffective!=='function')throw new Error('Kan beschikbaarheid niet ophalen.');
   const overrides=localAvailability();const result={};
   for(const key of weekDates(start)){
@@ -98,11 +83,13 @@ async function availabilityForWeek(start,{force=false}={}){
   app.availability.set(start,result);return result;
 }
 async function getActivitiesRange(start,end,{force=false}={}) {
+  const generation=app.authGeneration;
   const cacheKey=`${start}:${end}`;
   if(!force&&app.activityCache.has(cacheKey))return app.activityCache.get(cacheKey);
   const all=[];
   for(const chunk of intervalChunks(start,end,28)){
     const raw=await fetchIntervalsActivities(chunk.oldest,chunk.newest);
+    if(generation!==app.authGeneration)throw Error('Account gewijzigd.');
     all.push(...raw.map(normalizeActivity));
   }
   const unique=[...new Map(all.map(a=>[a.id,a])).values()];
@@ -113,12 +100,13 @@ async function getActivitiesRange(start,end,{force=false}={}) {
 // Only fetch private activity details through the authenticated, user-restricted Edge Function.
 // In-memory cache avoids repeated detail calls when regenerating a proposal in one session.
 async function fetchActivityDetailForPlanning(id) {
-  const key=String(id);
+  const generation=app.authGeneration,key=String(id);
   const cached=app.detailCache.get(key);
   if(cached && Date.now()-cached.at<10*60*1000)return cached.activity;
   const {data,error}=await supabase.functions.invoke('intervals-read',{
     body:{action:'get-activity-details',activityId:id}
   });
+  if(generation!==app.authGeneration)throw Error('Account gewijzigd.');
   if(error)throw new Error('Ophalen van Intervals.icu-activiteitsdetails mislukt.');
   if(!data?.activity || typeof data.activity!=='object')throw new Error('Geen geldige activiteitsdetails.');
   app.detailCache.set(key,{at:Date.now(),activity:data.activity});
@@ -261,7 +249,7 @@ function renderCalendar(rows,activities,currentMonth,failed=false){
 
 // PLAN OVERVIEW ---------------------------------------------------
 function fillPlanForm(plan){
-  if(!plan){$('l39-plan-start').value=weekStartOf(today());$('l39-discipline').value='xco';$('l39-limiter').value='auto';return;}
+  if(!plan){$('l39-plan-form').reset();$('l39-plan-start').value=weekStartOf(today());$('l39-discipline').value='xco';$('l39-limiter').value='auto';return;}
   $('l39-plan-name').value=plan.name||'Mijn trainingsplan';$('l39-plan-start').value=plan.start;
   $('l39-plan-race').value=plan.raceDate||'';$('l39-discipline').value=plan.discipline||'xco';$('l39-plan-weeks').value=plan.weeks.length;
   $('l39-plan-base').value=plan.baseLoad;$('l39-plan-growth').value=plan.progression;
@@ -312,7 +300,7 @@ function renderTimeline(){
     add(button,'small','',`W${w.week}`);add(button,'small','',w.phase==='Recovery'?'Herstel':'N'+progressionLevel(app.plan,w));button.title=`${w.phase} • week ${weekNumber(w.start)} • ${w.targetLoad} load • ${w.phase==='Recovery'?'herstel':'niveau '+progressionLevel(app.plan,w)}`;
   }
 }
-async function loadPlan(){if(!app.userId)return;renderTimeline();renderFeedbackPanel();await renderTwoWeeks()}
+async function loadPlan(){if(!app.userId)return;renderTimeline();await renderTwoWeeks()}
 function renderFeedbackPanel(){
   const host=$('l39-feedback-list');host.replaceChildren();
   const {week}=effectivePlanWeek(app.plan,weekWindowStart(),weekStartOf(today()));
@@ -625,7 +613,7 @@ async function syncPlanner({automatic=false,resolveConflict=null}={}){
 }
 function savePlan(){
   if(!app.plan||!app.userId){status('l39-plan-status','Genereer eerst een plan.','error');return}
-  localStorage.setItem(getPlanKey(),JSON.stringify(app.plan));
+  store().savePlan(app.plan);
   app.planDirty=false;
   status('l39-plan-status','Mesocycle lokaal bewaard.','good');syncPlanner({automatic:true});
 }
@@ -633,8 +621,10 @@ function savePlan(){
 // MODAL: WEEK AVAILABILITY --------------------------------------
 async function openAvailability(start){
   if(!app.userId)return;
+  const generation=app.authGeneration;
   try{
     const values=await availabilityForWeek(start);
+    if(generation!==app.authGeneration)return;
     app.weekModal={start,original:JSON.parse(JSON.stringify(values))};
     $('l39-week-dialog-title').textContent=`Week ${weekNumber(start)} · ${prettyDate(start)} – ${prettyDate(weekDates(start)[6])}`;
     const host=$('l39-week-sliders');host.replaceChildren();
@@ -715,9 +705,10 @@ async function saveAvailability(event){
 // MODAL: WORKOUT --------------------------------------------------
 async function openWorkout(date){
   if(!app.userId||date<nowKey())return;
-  const start=weekStartOf(parseDate(date));
+  const start=weekStartOf(parseDate(date)),generation=app.authGeneration;
   try{
     const available=await availabilityForWeek(start);
+    if(generation!==app.authGeneration)return;
     const capacity=available[date]?.available_minutes;
     if(capacity===null)throw new Error('Geen beschikbare minuten voor deze datum bekend.');
     const s=getSession(date),phase=effectivePlanWeek(app.plan,start,weekStartOf(today())).week;
@@ -778,6 +769,7 @@ function renderWorkoutPreview(){
 async function saveWorkout(event){
   event.preventDefault();if(!app.workoutModal||!app.userId)return;
   const {date,start,capacity,phase}=app.workoutModal;
+  if(date<nowKey()){status('l39-workout-modal-status','Deze dag is inmiddels verstreken.','error');return;}
   const {s,info}=previewWorkoutResult();
   if(s.type!=='rest'){
     const check=manualWorkoutValidation({type:s.type,durationMinutes:s.durationMinutes,capacity});
@@ -827,7 +819,7 @@ function handleActions(event){
   if(action==='workout')openWorkout(target.dataset.date);
   if(action==='completed')openCompleted(target.dataset.date,target.dataset.activityId);
   if(action==='availability')openAvailability(target.dataset.week);
-  if(action==='focus-week'){app.focusedWeek=target.dataset.week;setTab('plan');renderTimeline();renderTwoWeeks();}
+  if(action==='focus-week'){app.focusedWeek=target.dataset.week;setTab('plan');}
   if(action==='close-dialog')target.closest('dialog')?.close();
 }
 function registerListeners(){
@@ -877,4 +869,4 @@ async function initialize(){
     if(event==='SIGNED_IN'&&session?.user)setTimeout(()=>setSignedIn(session.user),0);
   });
 }
-initialize().catch(e=>console.error('Les 39 initialisatie:',e));
+initialize().catch(e=>{console.error('Planner initialisatie:',e);status('status-message','Planner kon niet worden gestart. Vernieuw de pagina.','error');});
