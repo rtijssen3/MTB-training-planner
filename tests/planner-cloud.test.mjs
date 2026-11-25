@@ -8,3 +8,16 @@ test("both changed conflict",()=>assert.ok((()=>syncDecision(two,{snapshot:empty
 test("identical snapshot",()=>assert.ok((()=>syncDecision(one,remote,null)==='same')()));
 test("seconds preserved",()=>assert.ok((()=>workoutText({steps:[{seconds:10,percentFtp:180},{seconds:60,percentFtp:50}]})==='- 10s 180%\n- 1m 50%')()));
 test('install saves backup and round trips',()=>{const m=new Map(),storage={get length(){return m.size},key:i=>[...m.keys()][i],getItem:k=>m.get(k)??null,setItem:(k,v)=>m.set(k,v),removeItem:k=>m.delete(k)};installSnapshot(storage,'a',one);assert.deepEqual(readSnapshot(storage,'a'),one);assert.deepEqual(JSON.parse(storage.getItem('mtb-cloud-backup:v1:a')),empty);assert.deepEqual(readSnapshot(storage,'b'),empty);});
+
+import {createCloudSync} from '../src/data/cloud-sync.js';
+const memory=()=>{const m=new Map();return {get length(){return m.size},key:i=>[...m.keys()][i],getItem:k=>m.get(k)??null,setItem:(k,v)=>m.set(k,v),removeItem:k=>m.delete(k)};};
+test('download cannot overwrite a dirty unsaved concept',async()=>{
+ const storage=memory();let allowed=true;
+ const client=createCloudSync({storage,user:'a',canDownload:()=>allowed,supabase:{from:()=>({select:()=>({eq:()=>({maybeSingle:async()=>{allowed=false;return {data:remote,error:null};}})})})}});
+ await assert.rejects(client.sync(),/niet-opgeslagen concept/);assert.deepEqual(readSnapshot(storage,'a'),empty);
+});
+test('changed local snapshot during lookup is never overwritten',async()=>{
+ const storage=memory();
+ const client=createCloudSync({storage,user:'a',supabase:{from:()=>({select:()=>({eq:()=>({maybeSingle:async()=>{installSnapshot(storage,'a',two);return {data:remote,error:null};}})})})}});
+ await assert.rejects(client.sync(),/Lokale wijzigingen/);assert.deepEqual(readSnapshot(storage,'a'),two);
+});

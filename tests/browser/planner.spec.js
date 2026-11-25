@@ -70,3 +70,17 @@ test('theme survives reload and cloud sync uses mock only',async({page})=>{
  await page.reload();
  await expect(page.locator('html')).toHaveAttribute('data-theme',after);
 });
+
+test('a second automatic save during cloud upload is not lost',async({page})=>{
+ await login(page);await plan(page);
+ await page.locator('#l39-settings-link').click();
+ await page.locator('#l39-cloud-enabled').check();
+ await page.locator('[data-tab=plan]').click();
+ await page.locator('#l39-discipline').selectOption('road');
+ await page.locator('#l39-plan-save').click();
+ await page.locator('#l39-discipline').selectOption('gravel');
+ await page.locator('#l39-plan-save').click();
+ await expect.poll(()=>page.evaluate(()=>window.__testCloudSnapshot?.plan?.discipline)).toBe('gravel');
+ await page.locator('#l39-settings-link').click();
+ await expect(page.locator('#l39-cloud-status')).toHaveText('Cloudopslag bevestigd.');
+});

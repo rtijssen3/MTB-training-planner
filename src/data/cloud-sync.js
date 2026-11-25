@@ -1,5 +1,5 @@
 import {readSnapshot,installSnapshot,syncDecision,canonical,validateSnapshot} from './planner-snapshot.js';
-export function createCloudSync({supabase,storage,user,isCurrent=()=>true}){
+export function createCloudSync({supabase,storage,user,isCurrent=()=>true,canDownload=()=>true}){
  const key='mtb-cloud-baseline:v1:'+user;
  const baseline=()=>{try{return JSON.parse(storage.getItem(key)||'null')}catch{return null}};
  let busy=false;
@@ -24,6 +24,7 @@ export function createCloudSync({supabase,storage,user,isCurrent=()=>true}){
        if(isCurrent())storage.setItem(key,JSON.stringify(local));
      }else if(action==='download'){
        if(!isCurrent())throw Error('Account gewijzigd.');
+       if(!canDownload())throw Error('Er is een niet-opgeslagen concept. Bewaar het eerst; cloudversie niet toegepast.');
        installSnapshot(storage,user,data.snapshot);storage.setItem(key,JSON.stringify(data.snapshot));
      }else if(action==='same'){storage.setItem(key,JSON.stringify(local));}
      return action;

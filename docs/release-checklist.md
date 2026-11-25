@@ -1,5 +1,5 @@
 # v1.0 release acceptance
-- [ ] GitHub Actions: unit tests, production build, isolated Chromium browser tests.
+- [ ] GitHub Actions: unit tests, production build, isolated Chromium, desktop WebKit and iPhone-profile browser tests, plus npm audit and locked npm ci installation.
 - [ ] Real-account login/logout; reload and theme; standard availability and weekly overrides persist across reload.
 - [ ] Real-account plan creation, both week proposals, fixed group ride, manual workout on zero availability; calendar summary and TSS.
 - [ ] Verify migration 007 and cloud sync from two browser profiles; download backup first; test conflicts with disposable data.

@@ -33,14 +33,14 @@ const monthLabel=(y,m)=>new Intl.DateTimeFormat('nl-NL',{month:'long',year:'nume
 const nowKey=()=>dateKey(today());
 const fixedLabel=value=>{const t=String(value||'').trim();return isGroupRide(t)?'Groepsrit':t;};
 
-const app={feedbackRows:[],feedbackStatus:'',feedbackBusy:false,cloud:null,cloudBusy:false,userId:null,plan:null,month:new Date(today().getFullYear(),today().getMonth(),1),focusedWeek:null,
+const app={feedbackRows:[],feedbackStatus:'',feedbackBusy:false,cloud:null,cloudBusy:false,cloudQueued:false,userId:null,plan:null,month:new Date(today().getFullYear(),today().getMonth(),1),focusedWeek:null,
   availability:new Map(),activityCache:new Map(),wellness:null,activeTab:'dashboard',
   weekModal:null,workoutModal:null,renderNumber:0,authGeneration:0,activityError:null,planDirty:false,proposing:false,detailCache:new Map()};
 
 function status(id,message,kind='') {const el=$(id);if(!el)return;el.textContent=message;el.classList.toggle('is-error',kind==='error');el.classList.toggle('is-good',kind==='good');}
 function htmlNode(tag,cls,text){const el=document.createElement(tag);if(cls)el.className=cls;if(text!==undefined)el.textContent=String(text);return el;}
 function add(parent,tag,cls,text){const node=htmlNode(tag,cls,text);parent.appendChild(node);return node;}
-function cleanUser(){app.weekModal=null;app.workoutModal=null;app.proposing=false;app.focusedWeek=null;app.feedbackRows=[];app.feedbackStatus='';app.feedbackBusy=false;app.cloud=null;app.cloudBusy=false;app.userId=null;app.plan=null;app.planDirty=false;app.activityCache.clear();app.detailCache.clear();app.availability.clear();app.wellness=null;app.activityError=null;app.authGeneration++;$('l39-dashboard-body').hidden=true;$('l39-calendar-grid').replaceChildren();$('l39-two-weeks').replaceChildren();$('l39-timeline').replaceChildren();$('l39-feedback-list').replaceChildren();$('l39-skill-priorities').replaceChildren();$('l39-feedback-status').textContent='';for(const d of document.querySelectorAll('dialog[open]'))d.close();}
+function cleanUser(){app.weekModal=null;app.workoutModal=null;app.proposing=false;app.focusedWeek=null;app.feedbackRows=[];app.feedbackStatus='';app.feedbackBusy=false;app.cloud=null;app.cloudBusy=false;app.cloudQueued=false;for(const id of ['l39-cloud-sync','l39-cloud-local','l39-cloud-remote'])$(id).disabled=false;app.userId=null;app.plan=null;app.planDirty=false;app.activityCache.clear();app.detailCache.clear();app.availability.clear();app.wellness=null;app.activityError=null;app.authGeneration++;$('l39-dashboard-body').hidden=true;$('l39-calendar-grid').replaceChildren();$('l39-two-weeks').replaceChildren();$('l39-timeline').replaceChildren();$('l39-feedback-list').replaceChildren();$('l39-skill-priorities').replaceChildren();$('l39-feedback-status').textContent='';for(const d of document.querySelectorAll('dialog[open]'))d.close();}
 const store=()=>createLocalPlannerStore(localStorage,app.userId,today);
 function localAvailability(){return store().localAvailability();}
 function setLocalAvailability(data){store().setLocalAvailability(data);}
@@ -597,11 +597,12 @@ function generatePlan(event){
 }
 function cloudEnabled(){return !!app.userId&&localStorage.getItem('mtb-cloud-enabled:'+app.userId)==='1';}
 async function syncPlanner({automatic=false,resolveConflict=null}={}){
-  if(!app.cloud||app.cloudBusy||automatic&&!cloudEnabled())return;
+  if(!app.cloud||automatic&&!cloudEnabled())return;
+  if(app.cloudBusy){if(automatic)app.cloudQueued=true;return;}
   if(app.planDirty&&!automatic){status('l39-cloud-status','Bewaar eerst je mesocycle.','error');return;}
   if(automatic&&app.planDirty)return;
   const generation=app.authGeneration,client=app.cloud;
-  app.cloudBusy=true;status('l39-cloud-status','Synchroniseren…');
+  app.cloudBusy=true;app.cloudQueued=false;status('l39-cloud-status','Synchroniseren…');
   for(const id of ['l39-cloud-sync','l39-cloud-local','l39-cloud-remote'])$(id).disabled=true;
   try{
     const result=await client.sync({allowDownload:!automatic,resolveConflict});
@@ -609,7 +610,7 @@ async function syncPlanner({automatic=false,resolveConflict=null}={}){
     if(result==='download'){app.plan=readPlan();app.planDirty=false;fillPlanForm(app.plan);setTab(app.activeTab);}
     status('l39-cloud-status',({upload:'Cloudopslag bevestigd.',download:'Cloudversie opgehaald. Lokale back-up behouden.',same:'Lokaal en cloud zijn gelijk.',nothing:'Nog geen opgeslagen gegevens.'})[result],'good');
   }catch(e){if(generation===app.authGeneration){status('l39-cloud-status',e.message,'error');if(automatic)status('l39-plan-status','Lokaal opgeslagen; cloud niet bevestigd: '+e.message,'error');}}
-  finally{if(generation===app.authGeneration){app.cloudBusy=false;for(const id of ['l39-cloud-sync','l39-cloud-local','l39-cloud-remote'])$(id).disabled=false;}}
+  finally{if(generation===app.authGeneration){app.cloudBusy=false;for(const id of ['l39-cloud-sync','l39-cloud-local','l39-cloud-remote'])$(id).disabled=false;const queued=app.cloudQueued;app.cloudQueued=false;if(queued)void syncPlanner({automatic:true});}}
 }
 function savePlan(){
   if(!app.plan||!app.userId){status('l39-plan-status','Genereer eerst een plan.','error');return}
@@ -858,7 +859,7 @@ function registerListeners(){
 }
 function setSignedIn(user){
   if(app.userId===user.id)return;
-  cleanUser();app.userId=user.id;const generation=app.authGeneration;app.cloud=createCloudSync({supabase,storage:localStorage,user:user.id,isCurrent:()=>generation===app.authGeneration});$('l39-cloud-enabled').checked=cloudEnabled();status('l39-cloud-status','');app.plan=readPlan();app.planDirty=false;app.focusedWeek=null;fillPlanForm(app.plan);
+  cleanUser();app.userId=user.id;const generation=app.authGeneration;app.cloud=createCloudSync({supabase,storage:localStorage,user:user.id,isCurrent:()=>generation===app.authGeneration,canDownload:()=>!app.planDirty});$('l39-cloud-enabled').checked=cloudEnabled();status('l39-cloud-status','');app.plan=readPlan();app.planDirty=false;app.focusedWeek=null;fillPlanForm(app.plan);
   const tab=location.hash.slice(1);setTab(['dashboard','calendar','plan'].includes(tab)?tab:'dashboard');
 }
 async function initialize(){

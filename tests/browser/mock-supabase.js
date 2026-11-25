@@ -24,7 +24,7 @@ export const supabase={
   if(name==='freeze_past_availability')return ok(null);
   if(name==='save_calendar_checked'){if(args.p_expected_revision!==revision)return {error:{message:'AVAILABILITY_CONFLICT'}};for(const c of args.p_changes){if(c.action==='delete')overrides.delete(c.date);else overrides.set(c.date,c);}return ok({saved_count:args.p_changes.length,revision:++revision});}
   if(name==='save_weekly_checked'){weekly=args.p_rows;return ok(++revision);}
-  if(name==='save_training_planner_state'){if(args.p_expected_revision!==(remote?.revision??0))return {error:{message:'PLANNER_CONFLICT'}};remote={snapshot:args.p_snapshot,revision:(remote?.revision??0)+1};return ok(remote.revision);}
+  if(name==='save_training_planner_state'){await new Promise(resolve=>setTimeout(resolve,700));if(args.p_expected_revision!==(remote?.revision??0))return {error:{message:'PLANNER_CONFLICT'}};remote={snapshot:args.p_snapshot,revision:(remote?.revision??0)+1};window.__testCloudSnapshot=remote.snapshot;return ok(remote.revision);}
   return {data:null,error:{message:'Unexpected test RPC '+name}};
  },
  functions:{invoke:async(name,{body})=>{
