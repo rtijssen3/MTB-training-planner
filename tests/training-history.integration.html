@@ -1,0 +1,324 @@
+
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1">
+
+  <title>Les 29 – Trainingshistorie</title>
+
+  <style>
+    :root {
+      font-family: system-ui, sans-serif;
+      background: #f5f7f5;
+      color: #24332d;
+    }
+
+    body {
+      max-width: 1000px;
+      margin: 40px auto;
+      padding: 0 18px;
+    }
+
+    h1 {
+      color: #207653;
+    }
+
+    button {
+      background: #207653;
+      color: white;
+      border: 0;
+      border-radius: 8px;
+      padding: 12px 18px;
+      cursor: pointer;
+      font: inherit;
+    }
+
+    button:disabled {
+      opacity: 0.5;
+    }
+
+    .panel {
+      background: white;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 18px 0;
+      box-shadow: 0 2px 12px #0000000a;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin: 16px 0;
+    }
+
+    .stat {
+      background: #edf5ef;
+      padding: 15px;
+      border-radius: 9px;
+    }
+
+    .stat strong {
+      display: block;
+      font-size: 26px;
+      margin-top: 7px;
+    }
+
+    .chart-row {
+      display: grid;
+      grid-template-columns: 95px 1fr 60px;
+      align-items: center;
+      gap: 12px;
+      margin: 12px 0;
+    }
+
+    .bar-track {
+      height: 16px;
+      background: #e5ece7;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .bar {
+      height: 100%;
+      background: #26815c;
+      border-radius: 8px;
+    }
+
+    .muted {
+      color: #68776e;
+    }
+
+    .success {
+      color: #207653;
+      font-weight: 600;
+    }
+
+    .error {
+      color: #b42318;
+      font-weight: 600;
+    }
+
+    .warning {
+      color: #9a591a;
+    }
+
+    @media (max-width: 650px) {
+      .stats {
+        grid-template-columns: 1fr;
+      }
+
+      .chart-row {
+        grid-template-columns: 72px 1fr 45px;
+        gap: 6px;
+        font-size: 12px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <h1>Les 29 – Trainingsbelastinghistorie</h1>
+
+  <div class="panel">
+    <p>
+      We analyseren de laatste 12 volledig
+      afgesloten trainingsweken.
+    </p>
+
+    <button id="loadButton">
+      Analyseer mijn trainingshistorie
+    </button>
+
+    <p id="status" class="muted">
+      Nog geen analyse uitgevoerd.
+    </p>
+  </div>
+
+  <div class="panel" id="overview" hidden>
+    <h2>Historische trainingsbelasting</h2>
+
+    <p id="period" class="muted"></p>
+
+    <div class="stats">
+      <div class="stat">
+        Laatste 4 weken
+        <strong id="recent">—</strong>
+        <small>Gemiddelde load/week</small>
+      </div>
+
+      <div class="stat">
+        Vorige 4 weken
+        <strong id="previous">—</strong>
+        <small>Gemiddelde load/week</small>
+      </div>
+
+      <div class="stat">
+        Verandering
+        <strong id="change">—</strong>
+        <small>Recent versus vorig blok</small>
+      </div>
+    </div>
+
+    <h3>Trainingsbelasting per week</h3>
+
+    <div id="chart"></div>
+
+    <p id="quality" class="warning"></p>
+
+    <p class="muted">
+      Dit is een beschrijvende analyse.
+      Er wordt nog geen automatisch TSS-doel
+      of CTL-ramp rate berekend.
+    </p>
+  </div>
+
+  <script type="module">
+    import {
+      fetchTrainingHistory
+    } from '../training-history.js';
+
+    const button = document.getElementById(
+      'loadButton'
+    );
+
+    const status = document.getElementById(
+      'status'
+    );
+
+    const overview = document.getElementById(
+      'overview'
+    );
+
+    const chart = document.getElementById(
+      'chart'
+    );
+
+    function byId(id) {
+      return document.getElementById(id);
+    }
+
+    function number(value) {
+      return Math.round(value).toLocaleString('nl-NL');
+    }
+
+    function render(history) {
+      byId('period').textContent =
+        `${history.start} t/m ${history.end}`;
+
+      byId('recent').textContent =
+        number(history.recentFourWeekAverage);
+
+      byId('previous').textContent =
+        number(history.previousFourWeekAverage);
+
+      byId('change').textContent =
+        history.changePercent === null
+          ? '—'
+          : (
+              (history.changePercent > 0 ? '+' : '') +
+              history.changePercent.toFixed(1) +
+              '%'
+            );
+
+      chart.replaceChildren();
+
+      const maxLoad = Math.max(
+        1,
+        ...history.weeks.map(week => week.load)
+      );
+
+      for (const week of history.weeks) {
+        const row = document.createElement('div');
+        row.className = 'chart-row';
+
+        const label = document.createElement('span');
+        label.textContent = week.start.slice(5);
+
+        const track = document.createElement('div');
+        track.className = 'bar-track';
+
+        const bar = document.createElement('div');
+        bar.className = 'bar';
+        bar.style.width =
+          `${100 * week.load / maxLoad}%`;
+
+        track.appendChild(bar);
+
+        const value = document.createElement('strong');
+        value.textContent = number(week.load);
+
+        row.append(label, track, value);
+        chart.appendChild(row);
+      }
+
+      const warnings = [];
+
+      if (history.totalMissingLoad > 0) {
+        warnings.push(
+          `${history.totalMissingLoad} activiteiten ` +
+          'zonder bekende load.'
+        );
+      }
+
+      if (history.emptyWeeks > 0) {
+        warnings.push(
+          `${history.emptyWeeks} weken zonder ` +
+          'geregistreerde activiteiten. ' +
+          'Controleer of dit echte rustweken zijn.'
+        );
+      }
+
+      warnings.push(
+        'Controleer of de API alle relevante ' +
+        'activiteiten teruggeeft.'
+      );
+
+      byId('quality').textContent =
+        warnings.join(' ');
+
+      overview.hidden = false;
+    }
+
+    async function run() {
+      button.disabled = true;
+      overview.hidden = true;
+
+      status.className = 'muted';
+      status.textContent =
+        'Drie historische periodes ophalen...';
+
+      try {
+        const history =
+          await fetchTrainingHistory(new Date());
+
+        render(history);
+
+        status.className = 'success';
+        status.textContent =
+          `PASS – ${history.activityCount} ` +
+          'activiteiten over 12 volledige ' +
+          'weken verwerkt.';
+
+        console.log(
+          'Training history analysis:',
+          history
+        );
+
+      } catch (error) {
+        console.error(error);
+
+        status.className = 'error';
+        status.textContent =
+          'FAIL – ' + error.message;
+      } finally {
+        button.disabled = false;
+      }
+    }
+
+    button.addEventListener('click', run);
+  </script>
+</body>
+</html>

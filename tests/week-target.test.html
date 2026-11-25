@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="nl"><head><meta charset="utf-8"><title>Weekdoel – regressietests</title><style>body{font:16px system-ui;max-width:800px;margin:40px auto;padding:0 16px} .pass{color:#16744d}.fail{color:#b42318}</style></head><body><h1>Weekdoel – regressietests</h1><div id="results"></div><h2 id="summary"></h2>
+<script type="module">
+import {createMesocycle,effectivePlanWeek,weekFor} from '../planner-model.js';
+let passed=0,failed=0;
+function check(name,fn){const el=document.createElement('p');try{fn();passed++;el.className='pass';el.textContent='PASS – '+name}catch(e){failed++;el.className='fail';el.textContent='FAIL – '+name+': '+e.message}document.querySelector('#results').append(el)}
+function eq(a,b){if(a!==b)throw new Error(`Verwacht ${b}, gekregen ${a}`)}
+const plan=createMesocycle({name:'Test',start:'2026-11-30',weeks:8,baseLoad:225});
+check('Mesocycle begint in week 49',()=>eq(plan.weeks[0].start,'2026-11-30'));
+check('Exacte week 48 ontbreekt in mesocycle',()=>eq(weekFor(plan,'2026-11-23'),null));
+check('Huidige week 48 krijgt indicatief weekdoel',()=>eq(effectivePlanWeek(plan,'2026-11-23','2026-11-23').week.targetLoad,225));
+check('Week 48 is expliciet indicatief',()=>eq(effectivePlanWeek(plan,'2026-11-23','2026-11-23').indicative,true));
+check('Week 49 houdt eigen mesocycledoel',()=>eq(effectivePlanWeek(plan,'2026-11-30','2026-11-23').week.targetLoad,225));
+check('Week 49 is niet indicatief',()=>eq(effectivePlanWeek(plan,'2026-11-30','2026-11-23').indicative,false));
+check('Een verstreken week krijgt geen kunstmatig doel',()=>eq(effectivePlanWeek(plan,'2026-11-16','2026-11-23').week,null));
+check('Geen plan betekent geen doel',()=>eq(effectivePlanWeek(null,'2026-11-23','2026-11-23').week,null));
+const ownPlan=createMesocycle({name:'Nu',start:'2026-11-23',weeks:8,baseLoad:315});
+check('Mesocycle die deze week begint gebruikt echt doel',()=>eq(effectivePlanWeek(ownPlan,'2026-11-23','2026-11-23').week.targetLoad,315));
+check('Exact doel heeft voorrang op indicatief doel',()=>eq(effectivePlanWeek(ownPlan,'2026-11-23','2026-11-23').indicative,false));
+check('Ongewijzigde startdatum van oorspronkelijke mesocycle',()=>eq(plan.weeks[0].start,'2026-11-30'));
+document.querySelector('#summary').textContent=`${passed} geslaagd, ${failed} mislukt`;
+</script></body></html>

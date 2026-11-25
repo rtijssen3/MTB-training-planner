@@ -1,0 +1,343 @@
+
+/* ==========================================
+   MTB Training Planner
+   Les 31 – Gecombineerd trainingsoverzicht
+   ========================================== */
+
+/* Oude TSS-sectie blijft bestaan in de HTML,
+   maar wordt vervangen door het nieuwe overzicht. */
+
+#tss-plan {
+  display: none !important;
+}
+
+#training-dashboard {
+  display: block;
+  background: #ffffff;
+  color: #24332d;
+  border: 1px solid #e1e9e3;
+  border-radius: 16px;
+  padding: 26px;
+  margin: 24px 0;
+  box-shadow: 0 2px 12px #00000008;
+}
+
+#training-dashboard [hidden] {
+  display: none !important;
+}
+
+#training-dashboard * {
+  box-sizing: border-box;
+}
+
+/* Header */
+
+.po-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.po-header h2 {
+  color: #207653;
+  margin: 0 0 6px;
+  font-size: 24px;
+}
+
+#po-week {
+  margin: 0;
+  font-size: 13px;
+  color: #68776e;
+}
+
+#po-status {
+  color: #68776e;
+  font-size: 13px;
+  margin: 10px 0 18px;
+  line-height: 1.5;
+}
+
+#po-status.po-error {
+  color: #b42318;
+}
+
+/* Buttons */
+
+#training-dashboard button {
+  border: 0;
+  background: #207653;
+  color: white;
+  border-radius: 8px;
+  padding: 11px 16px;
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+#training-dashboard button:hover:not(:disabled) {
+  background: #185b41;
+}
+
+#training-dashboard button:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
+/* Main KPI cards */
+
+.po-main-stats,
+.po-fitness-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.po-stat {
+  min-width: 0;
+  background: #f0f6f1;
+  border-radius: 10px;
+  padding: 16px;
+}
+
+.po-stat > span {
+  display: block;
+  color: #56695e;
+  font-size: 12px;
+}
+
+.po-stat > strong {
+  display: block;
+  color: #24332d;
+  font-size: 28px;
+  line-height: 1.2;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  margin-top: 8px;
+  overflow-wrap: anywhere;
+}
+
+.po-stat > small {
+  display: block;
+  color: #68776e;
+  font-size: 11px;
+  margin-top: 7px;
+}
+
+.po-main-stats .po-stat:nth-child(3) strong {
+  color: #207653;
+}
+
+/* TSS/load progress */
+
+.po-progress-track {
+  background: #e6ece7;
+  border-radius: 20px;
+  overflow: hidden;
+  height: 12px;
+  margin-top: 16px;
+}
+
+#po-progress-fill {
+  height: 100%;
+  width: 0;
+  background: #26815c;
+  border-radius: 20px;
+  transition: width 0.25s ease;
+}
+
+.po-note {
+  font-size: 12px;
+  color: #68776e;
+  line-height: 1.6;
+  margin: 12px 0 0;
+}
+
+/* Target editing */
+
+.po-target-form {
+  margin: 20px 0 4px;
+  background: #f8faf8;
+  border: 1px solid #e5ece6;
+  padding: 16px;
+  border-radius: 10px;
+}
+
+.po-target-form label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 9px;
+}
+
+.po-target-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 9px;
+}
+
+#po-target-input {
+  width: 180px;
+  max-width: 55%;
+  padding: 10px 12px;
+  border: 1px solid #cbd7cf;
+  background: white;
+  color: #24332d;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 15px;
+}
+
+.po-target-form small {
+  color: #68776e;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* Separate dashboard sections */
+
+.po-section {
+  border-top: 1px solid #e1e9e3;
+  padding-top: 23px;
+  margin-top: 23px;
+}
+
+.po-section h3 {
+  font-size: 17px;
+  margin: 0 0 15px;
+  color: #24332d;
+}
+
+/* Daily load: NUMBERS, NOT BARS */
+
+.po-days {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.po-day {
+  min-width: 0;
+  border-radius: 9px;
+  background: #f0f6f1;
+  padding: 15px 4px;
+  text-align: center;
+}
+
+.po-day-label {
+  display: block;
+  color: #68776e;
+  font-size: 12px;
+  margin-bottom: 9px;
+}
+
+.po-day-value {
+  display: block;
+  color: #24332d;
+  font-size: 22px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.po-day-future {
+  background: #f7f8f7;
+}
+
+.po-day-future .po-day-value {
+  color: #a0aaa3;
+}
+
+/* CTL / ATL / TSB */
+
+.po-fitness-stats .po-stat {
+  background: #f5f8f5;
+}
+
+.po-fitness-stats .po-stat > strong {
+  font-size: 25px;
+}
+
+/* Availability/time – secondary */
+
+.po-time-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.po-time-stats .po-stat {
+  background: #f5f8f5;
+}
+
+.po-time-stats .po-stat > strong {
+  font-size: 24px;
+}
+
+.po-footnote {
+  font-size: 12px;
+  color: #7b887f;
+  line-height: 1.6;
+  border-top: 1px solid #e1e9e3;
+  padding-top: 16px;
+  margin-top: 24px;
+}
+
+/* Responsive */
+
+@media (max-width: 650px) {
+  #training-dashboard {
+    padding: 16px;
+  }
+
+  .po-header {
+    flex-direction: column;
+  }
+
+  .po-header h2 {
+    font-size: 21px;
+  }
+
+  .po-main-stats,
+  .po-fitness-stats {
+    gap: 7px;
+  }
+
+  .po-stat {
+    padding: 11px;
+  }
+
+  .po-stat > strong {
+    font-size: 21px;
+  }
+
+  .po-fitness-stats .po-stat > strong {
+    font-size: 20px;
+  }
+
+  .po-days {
+    gap: 4px;
+  }
+
+  .po-day {
+    padding: 12px 2px;
+  }
+
+  .po-day-label {
+    font-size: 11px;
+  }
+
+  .po-day-value {
+    font-size: 17px;
+  }
+
+  .po-time-stats {
+    gap: 8px;
+  }
+
+  .po-time-stats .po-stat > strong {
+    font-size: 20px;
+  }
+}

@@ -1,0 +1,26 @@
+/* Les 35: concrete concepttrainingen, binnen de Weekplanner */
+#workout-planner { margin-top:24px; padding:24px; border-radius:16px; background:#fff; border:1px solid #dce8e0; box-shadow:0 9px 30px #143a2409; color:#243c2e; }
+#workout-planner [hidden] { display:none!important; }
+.wp-heading {display:flex;align-items:flex-start;justify-content:space-between;gap:18px}
+.wp-heading h3 {font-size:21px;margin:0 0 8px;color:#153f32}
+.wp-heading p {color:#64776f;font-size:13px;line-height:1.6;margin:0 0 8px}
+#workout-planner button {border:0;background:#196c50;color:white;border-radius:9px;padding:11px 15px;cursor:pointer;font:inherit;font-size:13px;font-weight:650}
+#workout-planner button:disabled {opacity:.55;cursor:wait}
+#workout-planner .wp-secondary {color:#196c50;background:#eaf4ed}
+#wp-status {font-size:13px;color:#196c50;margin:15px 0}
+#wp-status.wp-error {color:#ae2c22}
+.wp-week {font-size:13px;font-weight:700;color:#194d37;margin:18px 0}
+.wp-headings,.wp-day-row {display:grid;grid-template-columns:minmax(155px,1.5fr) minmax(145px,1.3fr) 100px 80px;align-items:center;gap:12px}
+.wp-headings {font-size:12px;color:#65796b;font-weight:700;padding:8px 14px}
+.wp-days {display:grid;gap:7px}
+.wp-day-row {background:#f2f8f4;border:1px solid #e4eee7;border-radius:10px;padding:12px 14px}
+.wp-day-info {display:flex;flex-direction:column;gap:4px}
+.wp-day-info strong {font-size:13px}
+.wp-day-info small {font-size:11px;color:#64776f}
+.wp-day-row select,.wp-day-row input {background:#fff;border:1px solid #bfd3c5;border-radius:8px;min-width:0;width:100%;padding:10px;font:inherit;font-size:13px;color:#243c2e}
+.wp-row-load {font-size:13px;font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+.wp-summary {font-weight:750;font-size:15px;color:#153f32;margin:20px 0 7px}
+.wp-warnings {font-size:12px;color:#a2651c;line-height:1.65}
+.wp-actions {display:flex;flex-wrap:wrap;gap:10px;margin:19px 0}
+.wp-explanation {color:#64776f;font-size:12px;line-height:1.65;border-top:1px solid #e1e9e3;padding-top:15px}
+@media(max-width:760px) {#workout-planner{padding:16px}.wp-heading{flex-direction:column}.wp-headings{display:none}.wp-day-row{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:9px}.wp-day-info{grid-column:1/-1}.wp-row-load{text-align:right}}

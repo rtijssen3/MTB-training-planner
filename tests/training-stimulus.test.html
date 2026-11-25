@@ -1,0 +1,41 @@
+<!doctype html><html lang="nl"><head><meta charset="utf-8"><title>Trainingsprikkel regressietests</title><style>body{font:16px system-ui;max-width:850px;margin:3rem auto;padding:1rem;background:#12171d;color:#e9f0f3}.ok{color:#83d9a6}.fail{color:#ff8b8b}li{margin:.6rem 0}</style></head><body><h1>Adaptieve kwaliteitsprikkels – tests</h1><ol id="results"></ol><h2 id="summary"></h2><script type="module">
+import {classifyTrainingStimulus,analyzeCompletedStimulus} from '../training-stimulus-model.js';
+import {proposeWorkoutWeek} from '../workout-plan-model.js';
+const tests=[];
+function test(title,actual,expected){tests.push({title,actual,expected,ok:JSON.stringify(actual)===JSON.stringify(expected)});}
+const a=(id,date,name)=>({id,date,name,trainingLoad:70});
+const start='2026-11-23',today='2026-11-25';
+const names=[['VO2max 5x3','quality'],['Threshold intervals','quality'],['FTP test','quality'],['wedstrijd','quality'],['Duur Z2','endurance'],['Recovery spin','endurance'],['Morning Ride','unknown'],['Group ride','unknown'],['Tempo ride','unknown']];
+for(const [name,expected] of names)test('Classificatie '+name,classifyTrainingStimulus({name}).category,expected);
+let s=analyzeCompletedStimulus([a(1,'2026-11-24','VO2max 5x3')],start,today);
+test('Eén kwaliteitsprikkel',s.qualityCount,1);
+test('Eén intensieve sessie resteert',s.maxNewQuality,1);
+test('Maandag beschermd rondom dinsdag',s.blockedQualityDates.includes('2026-11-23'),true);
+test('Woensdag beschermd rondom dinsdag',s.blockedQualityDates.includes('2026-11-25'),true);
+s=analyzeCompletedStimulus([a(1,'2026-11-23','VO2max'),a(2,'2026-11-24','Threshold')],start,today);
+test('Twee zware dagen: nul kwaliteitsbudget',s.maxNewQuality,0);
+s=analyzeCompletedStimulus([a(1,'2026-11-24','Morning Ride')],start,today);
+test('Onbekende rit telt niet hard als intensief',s.qualityCount,0);
+test('Onbekend: maximaal één nieuwe kwaliteit',s.maxNewQuality,1);
+test('Onbekend: bescherm aangrenzende dagen',s.blockedQualityDates.includes('2026-11-25'),true);
+s=analyzeCompletedStimulus([a(1,'2026-11-24','Duur Z2')],start,today);
+test('Herkenbare duurrit telt niet als intensief',s.maxNewQuality,2);
+s=analyzeCompletedStimulus([a(1,'2026-11-24','VO2max'),a(1,'2026-11-24','VO2max')],start,today);
+test('Dubbele ID telt eenmaal',s.actual.length,1);
+s=analyzeCompletedStimulus([a(1,'2026-11-26','VO2max')],start,today);
+test('Toekomstige rit telt niet',s.actual.length,0);
+const dates=['23','24','25','26','27','28','29'].map(d=>'2026-11-'+d);
+const capacity=Object.fromEntries(dates.map(date=>[date,{available_minutes:120}]));
+const week={start,phase:'Opbouw',targetLoad:350};
+let out=proposeWorkoutWeek({week,availabilityByDate:capacity,maxQualitySessions:0});
+test('Budget nul levert nul intensieve voorstellen',out.sessions.filter(s=>s.type!=='endurance').length,0);
+out=proposeWorkoutWeek({week,availabilityByDate:capacity,maxQualitySessions:1});
+test('Budget één levert maximaal één intensief voorstel',out.sessions.filter(s=>s.type!=='endurance').length<=1,true);
+out=proposeWorkoutWeek({week,availabilityByDate:capacity,maxQualitySessions:2,blockedQualityDates:['2026-11-24','2026-11-25','2026-11-26']});
+test('Beschermde dagen bevatten geen zware sessie',out.sessions.filter(s=>s.type!=='endurance').every(s=>!['2026-11-24','2026-11-25','2026-11-26'].includes(s.date)),true);
+test('Nog steeds geen aangrenzende nieuwe harde sessies',(()=>{const d=out.sessions.filter(s=>s.type!=='endurance').map(s=>dates.indexOf(s.date));return d.length<2||Math.abs(d[1]-d[0])>=2;})(),true);
+let thrown=false;try{proposeWorkoutWeek({week,availabilityByDate:capacity,maxQualitySessions:3});}catch{thrown=true;}
+test('Ongeldig kwaliteitsbudget afgewezen',thrown,true);
+let count=0;for(const t of tests){const li=document.createElement('li');li.className=t.ok?'ok':'fail';li.textContent=`${t.ok?'PASS':'FAIL'} · ${t.title}`+(t.ok?'':` · ontvangen ${JSON.stringify(t.actual)}, verwacht ${JSON.stringify(t.expected)}`);document.getElementById('results').append(li);if(t.ok)count++;}
+document.getElementById('summary').textContent=`${count}/${tests.length} tests geslaagd`;
+</script></body></html>

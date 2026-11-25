@@ -1,0 +1,96 @@
+/* MTB Training Planner – herontwerp: rustige, geïntegreerde werkruimte */
+:root {
+  --mtb-primary:#16765b; --mtb-dark:#173a32; --mtb-muted:#667b72;
+  --mtb-border:#dee9e2; --mtb-bg:#f6f8f6; --mtb-card:#fff; --mtb-soft:#eef6f1;
+}
+html { background:var(--mtb-bg); }
+body { background:#f6f8f6; font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+body .mtb-shell { width:min(1300px,calc(100% - 48px)); max-width:1300px; padding-top:20px; }
+#dashboard-section { display:grid; grid-template-columns:208px minmax(0,1fr); grid-template-areas:"header header" "nav content"; gap:0 30px; align-items:start; }
+#dashboard-section[hidden] { display:none!important; }
+.mtb-app-header { grid-area:header; padding:10px 0 27px; margin-bottom:8px; border-bottom:1px solid var(--mtb-border); }
+.mtb-brand-icon { width:42px;height:42px;border-radius:12px;background:#16765b; }
+.mtb-brand-kicker { color:#6c8275;letter-spacing:.12em; }
+.mtb-brand h1 { font-size:22px;letter-spacing:-.04em; }
+.pn-navigation { grid-area:nav; position:sticky;top:20px; display:flex;flex-direction:column; gap:4px; padding:8px; margin:16px 0 0; background:transparent;border:0;box-shadow:none; }
+.pn-nav-button { display:flex;flex-direction:row;justify-content:flex-start;gap:13px;text-align:left;padding:14px 16px;border-radius:11px;font-size:14px;color:#53675e; }
+.pn-nav-button.pn-nav-active { background:#e7f2eb;color:#16765b;box-shadow:none; }
+.pn-nav-icon { font-size:19px; width:22px;text-align:center; }
+.pn-page { grid-area:content;min-width:0;margin-top:15px; }
+.pn-page-heading { margin-bottom:20px; }
+.pn-page-heading h2 { font-size:31px;letter-spacing:-.04em; }
+.pn-page-description { max-width:580px; }
+.pn-outline-button, .mtb-primary-button { border:1px solid #b9d8c6;border-radius:9px;padding:11px 17px;background:white;color:#16765b;font-weight:700;cursor:pointer;white-space:nowrap; }
+.mtb-primary-button {background:#16765b;color:white;border-color:#16765b;}
+.mtb-primary-button:hover {background:#10573f;}
+.mtb-primary-button:disabled,.pn-outline-button:disabled{opacity:.4;cursor:not-allowed;}
+.mtb-phase-pill { padding:8px 12px;border:1px solid #c9ded0;background:#edf7ef;color:#43735a;border-radius:99px;font-size:12px;white-space:nowrap; }
+#pn-page-dashboard #training-dashboard { border:1px solid var(--mtb-border);border-radius:18px;box-shadow:none;padding:26px;background:white; }
+/* Planner: één canvas, één actieve workflowstap */
+.mtb-workspace {background:white;border:1px solid var(--mtb-border);border-radius:18px;overflow:hidden;box-shadow:0 6px 26px #1b473008;}
+.mtb-step-tabs {display:flex;overflow-x:auto;gap:0;border-bottom:1px solid var(--mtb-border);background:#f9fbf9;padding:0 14px;scrollbar-width:thin;}
+.mtb-step-tab {border:0;border-bottom:3px solid transparent;border-radius:0;background:none;color:#71847a;font-weight:650;font-size:13px;padding:19px 13px 16px;cursor:pointer;white-space:nowrap;}
+.mtb-step-tab span {display:inline-grid;place-items:center;width:26px;height:26px;margin-right:7px;background:#edf2ed;color:#678070;border-radius:7px;font-size:11px;}
+.mtb-step-tab.mtb-step-active {border-color:#16765b;color:#16765b;}
+.mtb-step-tab.mtb-step-active span {background:#ddefe3;color:#16765b;}
+.mtb-workspace-content {padding:28px;min-width:0;}
+.mtb-step-panel[hidden] {display:none!important;}
+.mtb-step-intro {margin:0 0 24px;}
+.mtb-step-intro h3 {font-size:21px;letter-spacing:-.03em;color:#183e31;margin:0 0 7px;}
+.mtb-step-intro p {font-size:13px;line-height:1.6;color:#6b7c72;margin:0;}
+.mtb-calendar-layout {display:grid;grid-template-columns:minmax(0,1.8fr) minmax(260px,1fr);gap:20px;align-items:start;}
+.mtb-calendar-main {min-width:0;}
+.mtb-calendar-main #calendar {margin-bottom:12px;}
+.mtb-calendar-main .calendar-legend {display:flex;gap:8px 15px;flex-wrap:wrap;font-size:11px;color:#6b7c72;}
+.mtb-calendar-main .calendar-legend span {display:inline-flex;align-items:center;gap:5px;}
+.mtb-day-editor {margin:0!important;border:1px solid #e3ece5!important;background:#f9fbf9!important;padding:18px!important;border-radius:12px!important;min-width:0;}
+.mtb-day-editor h3 {margin-top:0;font-size:16px;}
+.mtb-calendar-save {border-top:1px solid var(--mtb-border);padding-top:20px;margin-top:24px;}
+.mtb-helper {font-size:12px;color:#75887b;margin:16px 0 0;}
+.mtb-step-footer {display:flex;justify-content:space-between;align-items:center;gap:15px;border-top:1px solid var(--mtb-border);margin-top:30px;padding-top:20px;}
+#mtb-step-counter {color:#6d8175;font-size:12px;}
+/* De afzonderlijke modules blijven onder de motorkap, visueel één geheel. */
+#mtb-periodization-slot .pz-panel,
+#workout-planner,#weekly-workout-load,#workout-details {margin:0!important;padding:0!important;border:0!important;border-radius:0!important;box-shadow:none!important;background:transparent!important;}
+#mtb-periodization-slot .pn-overline,
+#workout-planner .pn-overline,#weekly-workout-load .pn-overline,#workout-details .pn-overline {display:none;}
+/* Hun bestaande kopteksten zijn inhoudelijk dubbel met de workflowtitel. */
+#mtb-periodization-slot .pz-heading h3,
+#workout-planner .wp-heading h3,
+#weekly-workout-load .ww-header h3,
+#workout-details .wd-heading h3 {display:none;}
+#mtb-periodization-slot .pz-heading p:not(.pn-overline),
+#workout-planner .wp-heading p:not(.pn-overline),
+#weekly-workout-load .ww-header p:not(.pn-overline) {display:none;}
+#workout-planner .wp-explanation {font-size:11px;}
+/* Analyse mag grafieken en tabellen bevatten, dashboard niet. */
+#pn-page-analyse .pn-data-card,#pn-page-instellingen .pn-settings-card {border:1px solid var(--mtb-border);box-shadow:none;}
+#pn-page-analyse .pn-kpi {box-shadow:none;}
+#pn-page-analyse .pn-page-heading {margin-bottom:20px;}
+#login-section.mtb-login {margin:9vh auto 0;}
+@media (max-width:1050px) {
+  #dashboard-section{grid-template-columns:165px minmax(0,1fr);gap:0 17px;}
+  .mtb-calendar-layout{grid-template-columns:1fr;}
+}
+@media (max-width:760px) {
+  body .mtb-shell {width:calc(100% - 24px);}
+  #dashboard-section{display:block;}
+  #dashboard-section[hidden]{display:none!important;}
+  .mtb-app-header{margin-bottom:10px;}
+  .pn-navigation{position:sticky;top:0;z-index:20;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));background:#ffffffef;border:1px solid var(--mtb-border);box-shadow:0 5px 20px #174b3220;margin:0 0 22px;padding:5px;}
+  .pn-nav-button{flex-direction:column;justify-content:center;gap:5px;font-size:10px;padding:9px 1px;}
+  .pn-nav-icon{width:auto;}
+  .pn-page{margin:0;}
+  .mtb-workspace-content{padding:16px;}
+  .mtb-step-tab{padding:13px 10px;font-size:12px;}
+  .mtb-step-tab span{width:22px;height:22px;margin-right:5px;}
+}
+@media (max-width:450px) {
+  .mtb-app-header{gap:8px;}
+  .mtb-brand h1{font-size:17px;}
+  .mtb-brand-kicker{font-size:8px;}
+  .pn-page-heading h2{font-size:25px;}
+  .mtb-phase-pill{display:none;}
+  .mtb-step-footer{flex-wrap:wrap;}
+  #mtb-step-counter{order:3;flex-basis:100%;text-align:center;}
+}

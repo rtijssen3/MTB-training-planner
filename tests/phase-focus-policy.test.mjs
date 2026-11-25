@@ -1,0 +1,34 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {PHASE_FOCUS,derivePhaseWorkoutPolicy} from '../phase-focus-policy.js';
+import {proposeWorkoutWeek} from '../workout-plan-model.js';
+const policy=(phase,adaptivePolicy)=>derivePhaseWorkoutPolicy({week:{phase},adaptivePolicy});
+const start='2026-11-23';
+const dates=Array.from({length:7},(_,i)=>{
+  const d=new Date(start+'T12:00:00Z');d.setUTCDate(d.getUTCDate()+i);return d.toISOString().slice(0,10);
+});
+const available=Object.fromEntries(dates.map(d=>[d,{available_minutes:120}]));
+const proposed=phase=>{const config=policy(phase);return proposeWorkoutWeek({week:{start,targetLoad:280,phase:phase==='Recovery'?'Herstel':'Opbouw'},availabilityByDate:available,maxQualitySessions:config.maxQualitySessions,qualityTypes:config.qualityTypes,blockedQualityDates:config.blockedQualityDates});};
+test('covers all four mesocycle phases',()=>assert.deepEqual(Object.keys(PHASE_FOCUS),['Base','Build','Peak','Recovery']));
+test('base prioritizes endurance, one quality max',()=>assert.equal(policy('Base').maxQualitySessions,1));
+test('base favors threshold',()=>assert.deepEqual(policy('Base').qualityTypes,['threshold','vo2max']));
+test('build permits at most two quality sessions',()=>assert.equal(policy('Build').maxQualitySessions,2));
+test('build prefers VO2',()=>assert.deepEqual(policy('Build').qualityTypes,['vo2max','threshold']));
+test('peak limits intensity to one',()=>assert.equal(policy('Peak').maxQualitySessions,1));
+test('recovery has no new quality',()=>assert.equal(policy('Recovery').maxQualitySessions,0));
+test('completed activities can tighten build quality maximum',()=>assert.equal(policy('Build',{maxNewQuality:1}).maxQualitySessions,1));
+test('completed activities can suppress quality completely',()=>assert.equal(policy('Build',{maxNewQuality:0}).maxQualitySessions,0));
+test('completed activities cannot increase base maximum',()=>assert.equal(policy('Base',{maxNewQuality:2}).maxQualitySessions,1));
+test('adaptive order after VO2 evidence preserved',()=>assert.deepEqual(policy('Build',{maxNewQuality:1,qualityTypes:['threshold','vo2max']}).qualityTypes,['threshold','vo2max']));
+test('bad or duplicate order falls back to phase default',()=>assert.deepEqual(policy('Build',{qualityTypes:['threshold','threshold']}).qualityTypes,['vo2max','threshold']));
+test('blocked dates retained and deduplicated',()=>assert.deepEqual(policy('Build',{blockedQualityDates:[dates[2],dates[2],dates[1]]}).blockedQualityDates,[dates[1],dates[2]]));
+test('reject unknown phase',()=>assert.throws(()=>policy('Opbouw')));
+test('reject invalid adaptive maximum',()=>assert.throws(()=>policy('Build',{maxNewQuality:5})));
+test('reject invalid recovery-date input',()=>assert.throws(()=>policy('Build',{blockedQualityDates:[33]})));
+test('base generation produces at most one quality session',()=>assert.ok(proposed('Base').intensitySessions<=1));
+test('build generation produces at most two quality sessions',()=>assert.ok(proposed('Build').intensitySessions<=2));
+test('peak generation produces at most one quality session',()=>assert.ok(proposed('Peak').intensitySessions<=1));
+test('recovery generation proposes no quality sessions',()=>assert.equal(proposed('Recovery').intensitySessions,0));
+test('base and build keep original saved load goal unaffected',()=>{
+  const w={phase:'Base',targetLoad:350};const x=derivePhaseWorkoutPolicy({week:w});assert.equal(w.targetLoad,350);assert.equal(x.phase,'Base');
+});

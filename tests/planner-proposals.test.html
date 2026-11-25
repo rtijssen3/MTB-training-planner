@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head><meta charset="UTF-8"><title>Tests: trainingsvoorstellen</title>
+<style>body{background:#181923;color:#eee;font:16px system-ui;max-width:850px;margin:35px auto;padding:0 20px}.pass{color:#80d6a0}.fail{color:#ff9090}</style></head>
+<body><h1>Trainingsvoorstellen – regressietests</h1><div id="results"></div><h2 id="summary"></h2>
+<script type="module">
+import {weekDates, proposalAvailability, mergeFutureSessions, createMesocycle, weekFor, addDays, parseDate, dateKey} from '../planner-model.js';
+let passed=0,failed=0;
+const out=document.querySelector('#results');
+function check(name,fn){const el=document.createElement('p');try{fn();passed++;el.className='pass';el.textContent='PASS – '+name;}catch(e){failed++;el.className='fail';el.textContent='FAIL – '+name+': '+e.message;}out.append(el)}
+function eq(actual,expected){if(JSON.stringify(actual)!==JSON.stringify(expected))throw new Error(`${JSON.stringify(actual)} != ${JSON.stringify(expected)}`)}
+const start='2026-11-23',now='2026-11-24';
+const caps=Object.fromEntries(weekDates(start).map((d,i)=>[d,{available_minutes:[0,90,120,90,0,60,180][i]}]));
+const usable=proposalAvailability(caps,start,now);
+check('Eerste week houdt vandaag beschikbaar',()=>eq(usable[now].available_minutes,90));
+check('Verstreken maandag krijgt nul minuten',()=>eq(usable['2026-11-23'].available_minutes,0));
+check('Toekomstige woensdag blijft beschikbaar',()=>eq(usable['2026-11-25'].available_minutes,120));
+check('Toekomstige zondag blijft beschikbaar',()=>eq(usable['2026-11-29'].available_minutes,180));
+check('Beschikbaarheid uit database wordt niet gewijzigd',()=>eq(caps['2026-11-23'].available_minutes,0));
+check('Gisteren met tijd wordt uitgesloten',()=>{const r=proposalAvailability({...caps,'2026-11-23':{available_minutes:120}},start,now);eq(r['2026-11-23'].available_minutes,0)});
+check('Tweede week blijft volledig beschikbaar',()=>{const next='2026-11-30';const c=Object.fromEntries(weekDates(next).map(d=>[d,{available_minutes:90}]));eq(Object.values(proposalAvailability(c,next,now)).every(v=>v.available_minutes===90),true)});
+check('Onbekende beschikbaarheid geeft fout',()=>{let thrown=false;try{proposalAvailability({},start,now)}catch{thrown=true}eq(thrown,true)});
+const old=[{date:'2026-11-23',type:'endurance',durationMinutes:60},{date:'2026-11-26',type:'threshold',durationMinutes:60}];
+const newer=[{date:'2026-11-25',type:'vo2max',durationMinutes:60}];
+const merged=mergeFutureSessions(old,newer,now);
+check('Historische sessie behouden bij nieuw voorstel',()=>eq(merged[0].date,'2026-11-23'));
+check('Toekomstige oude sessie vervangen',()=>eq(merged.some(s=>s.date==='2026-11-26'),false));
+check('Nieuwe toekomstige sessie toegevoegd',()=>eq(merged[1].date,'2026-11-25'));
+check('Samenvoeging chronologisch',()=>eq(merged.map(s=>s.date),['2026-11-23','2026-11-25']));
+const plan=createMesocycle({name:'Test',start:'2026-11-23',weeks:4,baseLoad:250});
+check('Eerste begonnen week is volwaardige mesocycleweek',()=>eq(weekFor(plan,'2026-11-23')?.targetLoad,250));
+check('Tweede week heeft eigen load-target',()=>eq(typeof weekFor(plan,'2026-11-30')?.targetLoad,'number'));
+check('Vervolgweek volgt op zeven dagen',()=>eq(dateKey(addDays(parseDate(start),7)),'2026-11-30'));
+document.querySelector('#summary').textContent=`${passed} geslaagd · ${failed} mislukt`;
+window.__tests={passed,failed};
+</script></body></html>

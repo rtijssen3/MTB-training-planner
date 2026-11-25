@@ -1,0 +1,32 @@
+/* Les 38 - Weekoverzicht, volledig ingekapselde styling */
+#weekly-workout-load{background:#fff;border:1px solid #dfe8e1;border-radius:16px;padding:24px;margin:22px 0;color:#24392e}
+#weekly-workout-load [hidden]{display:none!important}
+#weekly-workout-load *{box-sizing:border-box}
+.ww-header{display:flex;justify-content:space-between;align-items:start;gap:16px}
+.ww-header h3{font-size:21px;color:#195a41;margin:4px 0 8px}
+.ww-header p:not(.pn-overline){font-size:14px;color:#687a6f;line-height:1.5;margin:0 0 16px}
+#weekly-workout-load button{border:0;background:#207653;border-radius:9px;padding:11px 15px;color:#fff;cursor:pointer;font:inherit}
+#weekly-workout-load button:disabled{opacity:.55;cursor:wait}
+#ww-status{font-size:13px;color:#576d60;margin:14px 0}
+#ww-status.ww-error{color:#b42318}
+.ww-week{font-weight:650;font-size:14px;color:#24583e}
+.ww-ftp-controls{display:flex;align-items:end;gap:12px;flex-wrap:wrap;margin:16px 0 22px}
+.ww-ftp-controls label{font-size:13px;font-weight:650;display:block}
+.ww-ftp-controls input{padding:10px;border:1px solid #c8d6cc;border-radius:8px;min-width:105px;max-width:145px;font:inherit}
+.ww-kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.ww-kpis>div,.ww-type{background:#eff6f1;border-radius:11px;padding:16px;min-width:0}
+.ww-kpis span,.ww-type span{display:block;color:#566d5e;font-size:12px}
+.ww-kpis strong,.ww-type strong{display:block;color:#1e694b;font-size:26px;margin-top:7px;font-variant-numeric:tabular-nums}
+.ww-progress{height:12px;border-radius:99px;overflow:hidden;background:#e4ece6;margin:17px 0 8px}
+#ww-progress-fill{width:0;height:100%;background:#26815c;border-radius:99px}
+.ww-time,.ww-note{font-size:12px;color:#69796e;line-height:1.6}
+.ww-breakdown{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:12px 0 20px}
+.ww-type strong{font-size:20px}.ww-type small{display:block;color:#66796c;font-size:12px;margin-top:7px;line-height:1.5}
+#weekly-workout-load h4{font-size:16px;margin:23px 0 9px}
+.ww-table-wrap{overflow-x:auto}.ww-table{width:100%;border-collapse:collapse;min-width:620px}
+.ww-table th,.ww-table td{font-size:13px;padding:12px 8px;border-bottom:1px solid #e5ece7;text-align:left}
+.ww-table th{color:#556b5d;background:#f8faf8}.ww-table td:last-child{font-weight:650}
+.ww-table select{font:inherit;padding:8px 9px;max-width:240px;width:100%;border:1px solid #cfddd3;border-radius:7px;background:#fff;color:#24382b}
+.ww-warnings{color:#915821;font-size:13px;line-height:1.6;padding-left:20px}
+.ww-warnings:empty{display:none}
+@media(max-width:650px){#weekly-workout-load{padding:16px}.ww-header{flex-direction:column}.ww-kpis,.ww-breakdown{gap:6px}.ww-kpis>div,.ww-type{padding:11px}.ww-kpis strong{font-size:19px}.ww-type strong{font-size:17px}}

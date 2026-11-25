@@ -1,0 +1,30 @@
+<!DOCTYPE html><html lang="nl"><head><meta charset="UTF-8"><title>Les 36 – Workout detail tests</title><style>body{font:16px system-ui;max-width:850px;margin:40px auto;padding:0 20px}h1,.pass{color:#196c50}.fail{color:#b42318}li{margin:8px 0}</style></head><body>
+<h1>Les 36 – Workout detail tests</h1><ol id="results"></ol><h2 id="summary"></h2>
+<script type="module">
+import {createStructuredWorkout,toIntervalsWorkoutText} from '../workout-details-model.js';
+let passed=0,failed=0;
+function test(label,fn){const li=document.createElement('li');try{if(!fn())throw new Error('Verwachting niet gehaald');passed++;li.className='pass';li.textContent='PASS – '+label}catch(e){failed++;li.className='fail';li.textContent='FAIL – '+label+': '+e.message}document.getElementById('results').appendChild(li)}
+function fails(fn){try{fn();return false}catch{return true}}
+const build=(type,durationMinutes=60,ftp=290)=>createStructuredWorkout({type,durationMinutes,ftp});
+const total=w=>w.steps.reduce((n,s)=>n+s.seconds,0);
+test('Duurtraining exact 60 minuten',()=>total(build('endurance'))===3600);
+test('Threshold exact 60 minuten',()=>total(build('threshold'))===3600);
+test('VO2max exact 60 minuten',()=>total(build('vo2max'))===3600);
+test('Lange duurtraining exact 180 minuten',()=>total(build('endurance',180))===10800);
+test('Threshold minimaal twee werkblokken',()=>build('threshold',45).steps.filter(s=>s.kind==='work').length>=2);
+test('VO2max minimaal vier werkblokken',()=>build('vo2max',45).steps.filter(s=>s.kind==='work').length>=4);
+test('Threshold blok is 100% FTP',()=>build('threshold').steps.filter(s=>s.kind==='work').every(s=>s.percentFtp===100));
+test('VO2max blok is 115% FTP',()=>build('vo2max').steps.filter(s=>s.kind==='work').every(s=>s.percentFtp===115));
+test('FTP 290 bij 100% geeft 290 W',()=>build('threshold').steps.find(s=>s.kind==='work').watts===290);
+test('FTP 290 bij 115% geeft 334 W afgerond',()=>build('vo2max').steps.find(s=>s.kind==='work').watts===334);
+test('Onbekend type wordt geweigerd',()=>fails(()=>build('sprint')));
+test('FTP te laag wordt geweigerd',()=>fails(()=>build('endurance',60,90)));
+test('Te korte VO2max wordt geweigerd',()=>fails(()=>build('vo2max',30)));
+test('Te korte threshold wordt geweigerd',()=>fails(()=>build('threshold',30)));
+test('Loadproxy is positief',()=>build('endurance').estimatedSegmentLoad>0);
+test('Vermogens schaalt met FTP',()=>build('vo2max',60,300).steps.find(s=>s.kind==='work').watts>build('vo2max',60,250).steps.find(s=>s.kind==='work').watts);
+test('Kopieertekst heeft FTP-percentages',()=>toIntervalsWorkoutText(build('vo2max')).includes('115%'));
+test('Elke blokregel begint met -',()=>toIntervalsWorkoutText(build('threshold')).split('\n').slice(1).every(line=>line.startsWith('- ')));
+test('Geen workout zonder stappen',()=>fails(()=>toIntervalsWorkoutText({steps:[]})));
+document.getElementById('summary').textContent=`${passed} geslaagd, ${failed} mislukt`;
+</script></body></html>

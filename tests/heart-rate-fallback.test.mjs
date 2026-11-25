@@ -1,0 +1,24 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { analyzeHeartRateZones, analyzeIntervalsActivity, summarizeIntervalsPeriod, buildPrivacySafeReport } from '../training-analysis-model.js';
+import { evidenceForActivity, reviewCompletedTraining, reviewWeekPlanning } from '../training-decision-model.js';
+const hrOnly = {id:'h1', start_date_local:'2026-11-08T09:00:00', icu_training_load:83, hr_load:83, icu_hr_zone_times:[120,900,1800,600,60], icu_zone_times:null, icu_intervals:[{moving_time:3600, intensity:90, type:'RECOVERY'}]};
+const power = {id:'p1', start_date_local:'2026-11-05T10:00:00', icu_training_load:71, icu_zone_times: Array.from({length:7}, (_,i)=>({id:`Z${i+1}`,secs:60}))};
+test('preserve seconds in numeric HR zones',()=>assert.deepEqual(analyzeHeartRateZones([0,60,120]).seconds,[0,60,120]));
+test('reject invalid HR zones without inventing zeros',()=>assert.equal(analyzeHeartRateZones([10,-1]).status,'invalid'));
+test('null HR zones are missing',()=>assert.equal(analyzeHeartRateZones(null).status,'missing'));
+test('support 1-based HR zone objects',()=>assert.deepEqual(analyzeHeartRateZones([{id:'Z2',secs:22},{id:'Z1',secs:11}]).seconds,[11,22]));
+test('support 0-based HR zone objects',()=>assert.deepEqual(analyzeHeartRateZones([{id:0,secs:7},{id:1,secs:9}]).seconds,[7,9]));
+test('reject duplicate HR identifiers',()=>assert.equal(analyzeHeartRateZones([{id:1,secs:30},{id:1,secs:40}]).status,'invalid'));
+test('HR activity preserves HR load and excludes power',()=>{const a=analyzeIntervalsActivity(hrOnly);assert.equal(a.hrLoad,83);assert.equal(a.zones.status,'missing');assert.equal(a.heartRateZones.coveredSeconds,3480)});
+test('period includes HR-only load and power load',()=>{const s=summarizeIntervalsPeriod([hrOnly,power]);assert.equal(s.load.value,154);assert.equal(s.heartRateZones.covered,1);assert.equal(s.powerZones.covered,1)});
+test('privacy report keeps HR zone minutes',()=>{const r=buildPrivacySafeReport([hrOnly]);assert.deepEqual(r.activities[0].hrZoneMinutes,[2,15,30,10,1]);assert.equal(r.activities[0].hrLoad,83)});
+test('HR-only intensity is not interpreted as percentage FTP',()=>{const a=buildPrivacySafeReport([hrOnly]).activities[0];const evidence=evidenceForActivity(a);assert.equal(evidence.measurement,'heart-rate');assert.equal(evidence.effortCount.vo2Like,0);assert.equal(evidence.effortCount.thresholdLike,0)});
+test('HR-only activities still count toward total load',()=>{const r=buildPrivacySafeReport([hrOnly,power]);assert.equal(reviewCompletedTraining(r).totalLoad,154);assert.equal(reviewCompletedTraining(r).coverage.heartRateZones,1)});
+test('HR-only load is deducted from weekly target',()=>{const r=buildPrivacySafeReport([hrOnly]);assert.equal(reviewWeekPlanning(r,{weekStart:'2026-11-02',today:'2026-11-08',targetLoad:200}).remainingLoad,117)});
+test('HR zone categories never become Seiler power S1-S3',()=>{const r=buildPrivacySafeReport([hrOnly]);assert.equal(r.powerZones.covered,0);assert.equal(r.heartRateZones.covered,1)});
+test('unknown HR zones never converted to zero minutes',()=>{const r=buildPrivacySafeReport([{...hrOnly,icu_hr_zone_times:null}]);assert.equal(r.activities[0].hrZoneMinutes,null);assert.equal(evidenceForActivity(r.activities[0]).measurement,'load-only')});
+test('mixed HR zone counts are not aggregated',()=>{const r=summarizeIntervalsPeriod([hrOnly,{...hrOnly,id:'h2',icu_hr_zone_times:[100,200,300]}]);assert.equal(r.heartRateZones.compatible,false);assert.equal(r.heartRateZones.seconds,null)});
+
+test('equal zone counts with unknown bounds are not summed',()=>{const s=summarizeIntervalsPeriod([hrOnly,{...hrOnly,id:'h2'}]);assert.equal(s.heartRateZones.compatible,false);assert.equal(s.heartRateZones.seconds,null)});
+test('matching known HR zone thresholds permit totals',()=>{const thresholds=[100,120,140,160,180];const s=summarizeIntervalsPeriod([{...hrOnly,icu_hr_zones:thresholds},{...hrOnly,id:'h2',icu_hr_zones:thresholds}]);assert.equal(s.heartRateZones.compatible,true);assert.equal(s.heartRateZones.seconds[0],240)});

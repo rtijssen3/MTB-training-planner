@@ -1,0 +1,199 @@
+
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <title>Les 28 – TSS-plan tests</title>
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      max-width: 800px;
+      margin: 40px auto;
+      padding: 0 20px;
+    }
+    h1 { color: #207653; }
+    .pass { color: #207653; }
+    .fail { color: #b42318; }
+    .result { margin: 10px 0; }
+  </style>
+</head>
+<body>
+  <h1>Les 28 – Trainingsload tests</h1>
+  <div id="results"></div>
+  <h2 id="summary"></h2>
+
+  <script type="module">
+    import {
+      validateTargetLoad,
+      calculateLoadProgress,
+      previewFourWeekBlock
+    } from '../tss-plan.js';
+
+    const output = document.getElementById('results');
+
+    let passed = 0;
+    let failed = 0;
+
+    function test(name, callback) {
+      const row = document.createElement('div');
+      row.className = 'result';
+
+      try {
+        callback();
+        passed++;
+        row.classList.add('pass');
+        row.textContent = 'PASS – ' + name;
+      } catch (error) {
+        failed++;
+        row.classList.add('fail');
+        row.textContent =
+          'FAIL – ' + name + ': ' + error.message;
+      }
+
+      output.appendChild(row);
+    }
+
+    function equal(actual, expected) {
+      if (actual !== expected) {
+        throw new Error(
+          `Verwacht ${expected}, ontvangen ${actual}`
+        );
+      }
+    }
+
+    const activities = [
+      {
+        id: 'ride1',
+        start_date_local: '2026-11-17T09:00:00',
+        name: 'MTB',
+        type: 'Ride',
+        moving_time: 5400,
+        icu_training_load: 100
+      },
+      {
+        id: 'ride2',
+        start_date_local: '2026-11-18T09:00:00',
+        name: 'Intervals',
+        type: 'Ride',
+        moving_time: 3600,
+        icu_training_load: 80
+      }
+    ];
+
+    function calculate(overrides = {}) {
+      return calculateLoadProgress({
+        targetLoad: 300,
+        rawActivities: activities,
+        weekStart: '2026-11-16',
+        weekEnd: '2026-11-22',
+        today: '2026-11-19',
+        ...overrides
+      });
+    }
+
+    test('Weekdoel 300 is geldig', () => {
+      equal(validateTargetLoad(300), 300);
+    });
+
+    test('Leeg doel betekent geen doel', () => {
+      equal(validateTargetLoad(null), null);
+    });
+
+    test('Negatief doel wordt geweigerd', () => {
+      let rejected = false;
+
+      try {
+        validateTargetLoad(-100);
+      } catch {
+        rejected = true;
+      }
+
+      equal(rejected, true);
+    });
+
+    test('Uitgevoerde load is 180', () => {
+      equal(calculate().completedLoad, 180);
+    });
+
+    test('Voortgang is 60%', () => {
+      equal(calculate().progressPercent, 60);
+    });
+
+    test('Resterende load is 120', () => {
+      equal(calculate().remainingLoad, 120);
+    });
+
+    test('Zonder doel geen voortgangspercentage', () => {
+      equal(
+        calculate({
+          targetLoad: null
+        }).progressPercent,
+        null
+      );
+    });
+
+    test('Dubbele training telt niet dubbel', () => {
+      const result = calculate({
+        rawActivities: [
+          ...activities,
+          activities[0]
+        ]
+      });
+
+      equal(result.completedLoad, 180);
+    });
+
+    test('Toekomstige training telt niet mee', () => {
+      const result = calculate({
+        rawActivities: [
+          ...activities,
+          {
+            ...activities[0],
+            id: 'future',
+            start_date_local:
+              '2026-11-21T09:00:00'
+          }
+        ]
+      });
+
+      equal(result.completedLoad, 180);
+    });
+
+    test('Doeloverschrijding wordt vastgesteld', () => {
+      equal(
+        calculate({
+          targetLoad: 150
+        }).exceededTarget,
+        true
+      );
+    });
+
+    test('Ontbrekende load wordt gemeld', () => {
+      const result = calculate({
+        rawActivities: [
+          ...activities,
+          {
+            ...activities[0],
+            id: 'unknown',
+            icu_training_load: null
+          }
+        ]
+      });
+
+      equal(result.missingLoadCount, 1);
+    });
+
+    test('Vierweekse preview heeft een herstelweek', () => {
+      const block = previewFourWeekBlock(400);
+
+      equal(block.length, 4);
+      equal(block[3].phase, 'Herstel');
+      equal(block[3].targetLoad, 280);
+    });
+
+    document.getElementById('summary').textContent =
+      `${passed} geslaagd, ${failed} mislukt`;
+  </script>
+</body>
+</html>
+

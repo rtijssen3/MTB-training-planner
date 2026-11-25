@@ -1,0 +1,383 @@
+
+#training-dashboard {
+  background: #ffffff;
+  border: 1px solid #e1e9e3;
+  border-radius: 14px;
+  padding: 24px;
+  margin: 24px 0;
+  color: #24332d;
+  font-family: inherit;
+}
+
+#training-dashboard[hidden],
+#training-dashboard .td-content[hidden] {
+  display: none;
+}
+
+.td-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.td-heading h2 {
+  margin: 0 0 6px;
+  color: #207653;
+  font-size: 22px;
+}
+
+.td-week-label {
+  color: #68776e;
+  font-size: 13px;
+}
+
+.td-refresh-button {
+  background: #207653;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 16px;
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.td-refresh-button:hover:not(:disabled) {
+  background: #185a40;
+}
+
+.td-refresh-button:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
+.td-status {
+  color: #68776e;
+  font-size: 13px;
+  margin: 12px 0;
+}
+
+.td-status.td-success {
+  color: #207653;
+}
+
+.td-status.td-error {
+  color: #b42318;
+}
+
+.td-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin: 20px 0 26px;
+}
+
+.td-stat {
+  background: #f0f6f1;
+  border-radius: 10px;
+  padding: 18px;
+  min-width: 0;
+}
+
+.td-stat-label {
+  display: block;
+  color: #56695e;
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+
+.td-stat-value {
+  display: block;
+  color: #24332d;
+  font-size: 29px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.td-stat-description {
+  display: block;
+  color: #68776e;
+  font-size: 12px;
+  margin-top: 6px;
+}
+
+.td-section-title {
+  font-size: 16px;
+  margin: 0 0 16px;
+}
+
+.td-days {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.td-day-row {
+  display: grid;
+  grid-template-columns: 35px minmax(0, 1fr) 45px;
+  align-items: center;
+  gap: 12px;
+}
+
+.td-day-label {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.td-day-future {
+  opacity: 0.45;
+}
+
+.td-load-track {
+  height: 14px;
+  background: #e6ece7;
+  border-radius: 7px;
+  overflow: hidden;
+}
+
+.td-load-bar {
+  height: 100%;
+  background: #26815c;
+  border-radius: 7px;
+  transition: width 0.25s ease;
+}
+
+.td-day-load {
+  text-align: right;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.td-explanation,
+.td-quality {
+  color: #68776e;
+  font-size: 12px;
+  line-height: 1.6;
+  margin: 18px 0 0;
+}
+
+.td-quality:not(:empty) {
+  color: #a6631b;
+}
+
+@media (max-width: 600px) {
+  #training-dashboard {
+    padding: 16px;
+  }
+
+  .td-header {
+    flex-direction: column;
+  }
+
+  .td-stats {
+    gap: 9px;
+  }
+
+  .td-stat {
+    padding: 12px;
+  }
+
+  .td-stat-value {
+    font-size: 23px;
+  }
+
+  .td-stat-label {
+    font-size: 12px;
+  }
+}
+
+/* Les 28 – Trainingsload en weekdoel */
+
+#tss-plan {
+  background: white;
+  border: 1px solid #e1e9e3;
+  border-radius: 14px;
+  padding: 24px;
+  margin: 24px 0;
+  color: #24332d;
+}
+
+#tss-plan [hidden] {
+  display: none !important;
+}
+
+.tss-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.tss-header h2 {
+  color: #207653;
+  font-size: 22px;
+  margin: 0 0 6px;
+}
+
+.tss-header p,
+.tss-status {
+  color: #68776e;
+  font-size: 13px;
+  margin: 8px 0;
+}
+
+.tss-header button,
+.tss-target-controls button {
+  background: #207653;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 16px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.tss-target-form {
+  margin: 20px 0;
+}
+
+.tss-target-form label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.tss-target-controls {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.tss-target-controls input {
+  width: 170px;
+  max-width: 60%;
+  box-sizing: border-box;
+  border: 1px solid #cbd7cf;
+  border-radius: 8px;
+  padding: 10px;
+  font: inherit;
+}
+
+.tss-target-form small {
+  display: block;
+  color: #68776e;
+  line-height: 1.5;
+}
+
+.tss-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 22px 0;
+}
+
+.tss-summary > div {
+  background: #f0f6f1;
+  border-radius: 10px;
+  padding: 16px;
+  min-width: 0;
+}
+
+.tss-summary span {
+  display: block;
+  color: #56695e;
+  font-size: 12px;
+}
+
+.tss-summary strong {
+  display: block;
+  font-size: 25px;
+  margin-top: 8px;
+  overflow-wrap: anywhere;
+}
+
+.tss-progress-track {
+  height: 14px;
+  overflow: hidden;
+  background: #e6ece7;
+  border-radius: 10px;
+}
+
+#tss-progress-fill {
+  width: 0%;
+  height: 100%;
+  background: #26815c;
+  border-radius: 10px;
+  transition: width 0.3s ease;
+}
+
+#tss-explanation {
+  color: #56695e;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+#tss-block-preview {
+  border-top: 1px solid #e1e9e3;
+  margin-top: 24px;
+  padding-top: 18px;
+}
+
+#tss-block-preview h3 {
+  font-size: 16px;
+  margin: 0 0 8px;
+}
+
+#tss-block-preview p {
+  font-size: 12px;
+  color: #68776e;
+  line-height: 1.6;
+}
+
+.tss-block-weeks {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.tss-block-week {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: #f0f6f1;
+  padding: 12px;
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+.tss-block-week strong {
+  font-size: 20px;
+}
+
+.tss-error {
+  color: #b42318 !important;
+}
+
+@media (max-width: 650px) {
+  #tss-plan {
+    padding: 16px;
+  }
+
+  .tss-header {
+    flex-direction: column;
+  }
+
+  .tss-summary {
+    gap: 7px;
+  }
+
+  .tss-summary > div {
+    padding: 10px;
+  }
+
+  .tss-summary strong {
+    font-size: 19px;
+  }
+
+  .tss-block-weeks {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}

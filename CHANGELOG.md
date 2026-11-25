@@ -2,6 +2,19 @@
 
 All notable changes to the MTB Training Planner are documented in this file.
 
+## [1.0.0] - 2026-11-25
+
+- First stable version: event-based periodization, Friel-inspired skills, progressive and adaptive cycling workouts, calendar, dashboard, availability and explicit Intervals.icu export.
+- Reproducible dependency lock, cross-browser regression tests, security audit and cloud concurrency fixes.
+- Live acceptance tests confirmed by user; production deployment via GitHub Pages.
+
+## [1.0.0-rc.1]
+
+- Feature freeze: event plans, Friel-inspired training priorities, adaptive workouts and rider feedback.
+- Existing availability, calendar summary column, cloud synchronization and explicit export retained.
+- Extracted browser persistence; retained existing keys. Added isolated browser regression tests and release documentation.
+- Live Supabase/Intervals export and deployment require release acceptance checks.
+
 ## [0.2.0] - 2026-11-20
 
 ### Added
