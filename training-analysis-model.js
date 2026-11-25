@@ -36,6 +36,42 @@ export function analyzePowerZones(rawZones) {
   return { status: issues.length ? 'invalid' : allSeven ? 'complete' : 'partial', seconds, sweetSpotSeconds, sSeconds, coveredSeconds, issues };
 }
 
+/** Heart-rate zone time is NOT power-zone time. Indices are user-configured
+ * HR zones, and do not map to the 7-zone power model or Seiler S1-S3.
+ * The Intervals.icu API normally reports int[] (seconds per HR zone);
+ * some clients return {id, secs} objects. Avoid guessing missing indices.
+ */
+export function analyzeHeartRateZones(rawZones) {
+  const empty = { status: 'missing', seconds: null, coveredSeconds: null, issues: ['Geen hartslagzonegegevens'] };
+  if (!Array.isArray(rawZones) || rawZones.length === 0) return empty;
+  const issues = [];
+  let seconds = null;
+  if (rawZones.every(x => typeof x === 'number')) {
+    seconds = rawZones.map(x => positiveOrZero(x));
+    if (seconds.some(x => x === null)) issues.push('Ongeldige hartslagzoneduur');
+  } else if (rawZones.every(x => x && typeof x === 'object' && !Array.isArray(x))) {
+    const items = rawZones.map(x => ({
+      id: x.id ?? x.zone,
+      secs: positiveOrZero(x.secs) // named unit; other keys not assumed to be seconds
+    }));
+    const ids = items.map(x => {
+      if (typeof x.id === 'number' && Number.isInteger(x.id)) return x.id;
+      const match = typeof x.id === 'string' ? x.id.match(/^(?:HRZ|H|Z)?([0-9]+)$/i) : null;
+      return match ? Number(match[1]) : null;
+    });
+    // HR zone objects may use 0-based or 1-based indices; require contiguous identifiers.
+    const min = Math.min(...ids.filter(x => x !== null));
+    if (ids.some(x => x === null) || ![0, 1].includes(min) || new Set(ids).size !== ids.length ||
+        Math.max(...ids) - min + 1 !== ids.length || items.some(x => x.secs === null)) {
+      issues.push('Hartslagzone-objecten hebben geen geldige aaneengesloten indexering');
+    } else {
+      seconds = Array.from({length: items.length}, (_,i) => items[ids.indexOf(min+i)].secs);
+    }
+  } else issues.push('Onbekend formaat voor hartslagzonetijden');
+  if (issues.length || seconds === null) return {status:'invalid',seconds:null,coveredSeconds:null,issues};
+  return {status:'complete',seconds,coveredSeconds: seconds.reduce((a,b)=>a+b,0), issues:[]};
+}
+
 export function analyzeDetectedIntervals(rawIntervals) {
   if (!Array.isArray(rawIntervals)) return { status: 'missing', count: 0, records: [], totals: null, issues: ['Geen intervalgegevens'] };
   const records = [];
@@ -69,6 +105,11 @@ export function analyzeIntervalsActivity(raw) {
     ftp: positiveOrZero(a.icu_ftp), intensity: numberOrNull(a.icu_intensity),
     movingSeconds: positiveOrZero(a.moving_time),
     zones: analyzePowerZones(a.icu_zone_times),
+    heartRateZones: analyzeHeartRateZones(a.icu_hr_zone_times),
+    hrZoneBoundaries: Array.isArray(a.icu_hr_zones) && a.icu_hr_zones.every(finite) ? a.icu_hr_zones : null,
+    hrLoad: positiveOrZero(a.hr_load),
+    hrLoadType: typeof a.hr_load_type === 'string' ? a.hr_load_type : null,
+    powerLoad: positiveOrZero(a.power_load),
     intervals: analyzeDetectedIntervals(a.icu_intervals),
     intervalsTruncated: a.intervals_truncated === true
   };
@@ -96,6 +137,17 @@ export function summarizeIntervalsPeriod(rawActivities) {
     pcr: sumKnown(a=>a.strain.pcr)
   };
   const verified = activities.filter(a => a.zones.status === 'complete');
+  const hrVerified = activities.filter(a => a.heartRateZones.status === 'complete');
+  const hrCounts = [...new Set(hrVerified.map(a => a.heartRateZones.seconds.length))];
+  // HR zones may be configured differently across sports or dates.
+  // Only aggregate identical zone-count schemes; don't invent shared thresholds.
+  // Matching zone *counts* do not guarantee matching zone thresholds.
+  const hrFingerprints = hrVerified.map(a =>
+    a.hrZoneBoundaries?.length ? JSON.stringify(a.hrZoneBoundaries) : null);
+  const hrCompatible = hrVerified.length > 0 && hrCounts.length === 1 &&
+    hrFingerprints.every(x => x !== null && x === hrFingerprints[0]);
+  const hrSeconds = hrCompatible ? Array.from({length:hrCounts[0]},(_,i)=>
+    hrVerified.reduce((sum,a)=>sum+a.heartRateZones.seconds[i],0)) : null;
   const byZone = Object.fromEntries(Array.from({length:7},(_,i)=>[`Z${i+1}`, verified.reduce((s,a)=>s+a.zones.seconds[`Z${i+1}`],0)]));
   const sSeconds = {
     S1: byZone.Z1 + byZone.Z2,
@@ -105,6 +157,8 @@ export function summarizeIntervalsPeriod(rawActivities) {
   return {
     count: activities.length, activities, load, strain,
     powerZones: { seconds: byZone, sSeconds, covered: verified.length, missingOrInvalid: activities.length-verified.length, complete: verified.length===activities.length && activities.length>0 },
+    heartRateZones: {seconds:hrSeconds, covered:hrVerified.length, missingOrInvalid:activities.length-hrVerified.length,
+      compatible:hrCompatible, complete:hrVerified.length===activities.length && activities.length>0 && hrCompatible},
     intervals: { available: activities.filter(a=>a.intervals.status!=='missing').length, truncated: activities.filter(a=>a.intervalsTruncated).length },
     notes: ['S1–S3 zijn afgeleid uit Z1–Z7 en worden niet erbij opgeteld.', 'SS is Sweet Spot en overlapt de zeven vermogenszones.', 'Intervalduur kan overlappen en wordt niet als totale zone- of workoutduur gebruikt.', 'Weekclass en week-PI worden niet berekend uit gemiddelden van activiteiten.']
   };
@@ -118,12 +172,18 @@ export function buildPrivacySafeReport(rawActivities, {start=null,end=null}={}) 
     coverage: { load: s.load.known, strainScore: s.strain.score.known, strainComponents: { aerobic:s.strain.aerobic.known,glycolytic:s.strain.glycolytic.known,pcr:s.strain.pcr.known }, powerZones:s.powerZones.covered, intervals:s.intervals.available },
     load: s.load,
     strain: s.strain,
+    heartRateZones: { complete:s.heartRateZones.complete, covered:s.heartRateZones.covered,
+      compatible:s.heartRateZones.compatible, missingOrInvalid:s.heartRateZones.missingOrInvalid,
+      minutes:s.heartRateZones.seconds?.map(mins) ?? null },
     powerZones: { complete:s.powerZones.complete, covered:s.powerZones.covered, missingOrInvalid:s.powerZones.missingOrInvalid,
       zMinutes: Object.fromEntries(Object.entries(s.powerZones.seconds).map(([key,sec])=>[key,mins(sec)])),
       sMinutes: Object.fromEntries(Object.entries(s.powerZones.sSeconds).map(([key,sec])=>[key,mins(sec)])) },
     // The user explicitly opts in to copying aggregate numerical data.
     activities: s.activities.map(a=>({ date:a.date, load:a.load, strainScore:a.strainScore, strain:a.strain,
       polarizationIndex:a.polarizationIndex, class:a.reportedClass, intensity:a.intensity,
+      hrZonesStatus:a.heartRateZones.status, hrZoneMinutes:a.heartRateZones.seconds?.map(mins) ?? null,
+      hrLoad:a.hrLoad, hrLoadType:a.hrLoadType, powerLoad:a.powerLoad,
+      hrZoneBoundariesAvailable: Array.isArray(a.hrZoneBoundaries),
       zonesStatus:a.zones.status, zMinutes: Object.fromEntries(Object.entries(a.zones.seconds).map(([key,sec])=>[key,mins(sec)])),
       sweetSpotMinutes:mins(a.zones.sweetSpotSeconds), intervalCount:a.intervals.count,
       intervalSummary: a.intervals.records.slice(0,30).map(item=>({durationMin:mins(item.durationSeconds),intensity:item.intensity,zone:item.zone,watts:item.averageWatts,type:item.type})),

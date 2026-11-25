@@ -61,6 +61,7 @@ function initialize(parent) {
       ['Load', summary.load.complete ? fmt(summary.load.value) : `${fmt(summary.load.value)} (onvolledig)`],
       ['Strain Score',summary.strain.score.complete ? fmt(summary.strain.score.value) : `${fmt(summary.strain.score.value)} (onvolledig)`],
       ['Powerzones',`${summary.powerZones.covered}/${summary.count} compleet`],
+      ['Hartslagzones',`${summary.heartRateZones.covered}/${summary.count} compleet`],
       ['Intervallen',`${summary.intervals.available}/${summary.count} aanwezig`]
     ];
     const tiles=document.createElement('div');tiles.style.cssText='display:flex;flex-wrap:wrap;gap:8px;margin:12px 0';
@@ -76,6 +77,12 @@ function initialize(parent) {
       for(const key of ['S1','S2','S3'])valueRow.append(el('td',minutes(summary.powerZones.sSeconds[key])));
       table.append(valueRow);$('iat-summary').append(table);
     }
+    if (summary.heartRateZones.covered) {
+      const note=el('p', summary.heartRateZones.compatible
+        ? `HR-zones uit ${summary.heartRateZones.covered} ritten: ${summary.heartRateZones.seconds.map((v,i)=>`HR${i+1}: ${minutes(v)}`).join(' · ')}. Alleen dezelfde zone-indeling samenvoegen.`
+        : 'Hartslagzones zijn niet samengeteld: dezelfde zonegrenzen zijn niet voor alle ritten bevestigd.', 'l39-caption');
+      $('iat-summary').append(note);
+    }
     for (const activity of details) {
       const parsed=analyzeIntervalsActivity(activity);
       const card=el('div','');card.style.cssText='padding:12px;border:1px solid rgba(128,128,128,.25);border-radius:10px';
@@ -86,6 +93,9 @@ function initialize(parent) {
         ? `Vermogenszones: ${Object.entries(parsed.zones.seconds).map(([k,v])=>`${k} ${minutes(v)}`).join(' · ')} · Sweet Spot ${minutes(parsed.zones.sweetSpotSeconds)}`
         : `Zonegegevens ${parsed.zones.status}: ${parsed.zones.issues.join('; ')}`;
       card.append(el('p',zoneLine,'l39-caption'));
+      card.append(el('p', parsed.heartRateZones.status === 'complete'
+        ? `Hartslagzones: ${parsed.heartRateZones.seconds.map((secs,i)=>`HR${i+1}: ${minutes(secs)}`).join(' · ')} · HR Load ${fmt(parsed.hrLoad)}`
+        : `Hartslagzonegegevens ${parsed.heartRateZones.status} · HR Load ${fmt(parsed.hrLoad)}`, 'l39-caption'));
       const d=document.createElement('details');
       d.append(el('summary',`Gedetecteerde intervallen (${parsed.intervals.count})${parsed.intervalsTruncated?' – afgekapt':''}`));
       const table=el('table','');table.style.cssText='width:100%;font-size:12px';

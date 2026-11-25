@@ -127,7 +127,22 @@ function normalizeActivityDetail(raw: JsonObject) {
     ss_w_prime: finiteOrNull(raw.ss_w_prime),
     ss_p_max: finiteOrNull(raw.ss_p_max),
     icu_zone_times: normalizeZoneTimes(raw.icu_zone_times),
-    icu_hr_zone_times: normalizeZoneTimes(raw.icu_hr_zone_times),
+    // Unlike power ZoneTime records, HR zone times are commonly int[]
+    // (seconds in each configured HR zone). Preserve array indices.
+    icu_hr_zone_times: Array.isArray(raw.icu_hr_zone_times)
+      ? raw.icu_hr_zone_times.length <= 30 && raw.icu_hr_zone_times.every(
+          (v) => typeof v === 'number' && Number.isFinite(v) && v >= 0
+        )
+        ? raw.icu_hr_zone_times
+        : normalizeZoneTimes(raw.icu_hr_zone_times)
+      : null,
+    icu_hr_zones: Array.isArray(raw.icu_hr_zones)
+      ? raw.icu_hr_zones.filter((v) => typeof v === 'number' && Number.isFinite(v)).slice(0, 30)
+      : null,
+    hr_load: finiteOrNull(raw.hr_load),
+    hr_load_type: stringOrNull(raw.hr_load_type),
+    power_load: finiteOrNull(raw.power_load),
+    power_meter: typeof raw.power_meter === 'boolean' ? raw.power_meter : null,
     polarization_index: finiteOrNull(raw.polarization_index),
     classification: stringOrNull(raw.classification),
     icu_classification: stringOrNull(raw.icu_classification),
