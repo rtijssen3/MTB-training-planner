@@ -1,13 +1,17 @@
 // Workout feedback: detected intervals are evidence of exposure, not a recovery test.
 export const TYPES=["threshold","vo2max","force","skills","anaerobic","power"];
-export const RATINGS=["good","hard","neutral"];
+export const RATINGS=["easy","good","hard","neutral"];
+export const CYCLING_SPORTS=["Ride","MountainBikeRide","GravelRide","VirtualRide","EBikeRide","EMountainBikeRide"];
+export const isCyclingActivity=a=>CYCLING_SPORTS.includes(a?.sport);
+export function activityMatches(session,activities){return session?activities.filter(a=>a.date===session.date&&isCyclingActivity(a)):[];}
 const POWER_TYPES=["threshold","vo2max","anaerobic","power"];
 const iso=s=>typeof s==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(s);
 
 export function evaluateExecution(session,workout,rides,detail){
- const result={date:session.date,type:session.type,level:session.protocol==='progressive'&&[1,2,3].includes(session.level)?session.level:null,rating:RATINGS.includes(session.feedback)?session.feedback:null,matched:0,required:0,evidence:'unknown',reason:''};
+ const result={date:session.date,type:session.type,level:session.protocol==='progressive'&&[1,2,3].includes(session.level)?session.level:null,rating:null,completed:false,matched:0,required:0,evidence:'unknown',reason:''};
  if(!rides.length){result.reason='Geen fietsactiviteit gevonden op deze datum.';return result;}
  if(rides.length!==1){result.reason='Meerdere fietsactiviteiten; koppeling niet eenduidig.';return result;}
+ result.completed=true;result.activityId=String(rides[0].id);result.rating=RATINGS.includes(session.feedback)&&(!session.feedbackActivityId||String(session.feedbackActivityId)===result.activityId)?session.feedback:null;
  if(!POWER_TYPES.includes(session.type)){result.reason='Cadans/techniek niet aantoonbaar uit deze gegevens; eigen beoordeling nodig.';return result;}
  if(!workout?.steps?.length){result.reason='Voorgeschreven profiel niet beschikbaar.';return result;}
  const work=workout.steps.filter(s=>s.kind==='work');
@@ -31,7 +35,7 @@ export function evaluateExecution(session,workout,rides,detail){
 
 export function recommendLevel(type,planned,rows,today){
  if(!TYPES.includes(type)||![1,2,3].includes(planned)||!iso(today))throw Error('Ongeldige niveauvraag.');
- const recent=rows.filter(r=>r.type===type&&iso(r.date)&&r.date<today&&[1,2,3].includes(r.level)).sort((a,b)=>b.date.localeCompare(a.date));
+ const recent=rows.filter(r=>r.type===type&&iso(r.date)&&(r.date<today||r.date===today&&r.completed===true&&r.rating)&&r.completed!==false&&[1,2,3].includes(r.level)).sort((a,b)=>b.date.localeCompare(a.date));
  const latest=recent[0];
  if(!latest)return {level:1,decision:'start',reason:'Geen recent beoordeeld niveau; begin op N1.'};
  const age=(Date.parse(today+'T00:00:00Z')-Date.parse(latest.date+'T00:00:00Z'))/86400000;
@@ -41,11 +45,11 @@ export function recommendLevel(type,planned,rows,today){
  if(planned<latest.level)return {level:planned,decision:'reduce',reason:'De geplande fase begrenst het niveau.'};
  // Subjective recovery is required before increasing; matching intervals alone cannot show readiness.
  const previous=recent[1];
- const qualifies=r=>r&&(r.rating==='good'||r.evidence==='matched'&&r.rating!=='hard');
+ const qualifies=r=>r&&(['easy','good'].includes(r.rating)||r.evidence==='matched'&&r.rating!=='hard');
  const separation=previous?(Date.parse(latest.date+'T00:00:00Z')-Date.parse(previous.date+'T00:00:00Z'))/86400000:0;
  const previousAge=previous?(Date.parse(today+'T00:00:00Z')-Date.parse(previous.date+'T00:00:00Z'))/86400000:Infinity;
- if(latest.rating==='good'&&previous?.level===latest.level&&qualifies(previous)&&separation>=2&&previousAge<=21&&planned>latest.level){
-  return {level:latest.level+1,decision:'increase',reason:'Twee vergelijkbare sessies op hetzelfde niveau; laatste als goed uitgevoerd en hersteld beoordeeld.'};
+ if(latest.date<today&&['easy','good'].includes(latest.rating)&&previous?.level===latest.level&&qualifies(previous)&&separation>=2&&previousAge<=21&&planned>latest.level){
+  return {level:latest.level+1,decision:'increase',reason:'Twee vergelijkbare sessies op hetzelfde niveau; laatste als goed uitvoerbaar of gemakkelijk beoordeeld. Controleer herstel.'};
  }
  return {level:cap,decision:'hold',reason:latest.evidence==='matched'?'Intervallen herkend; nog onvoldoende bevestigde herstel-/herhalingsevidentie voor verhogen.':'Niveau behouden; uitvoering of herstel niet voldoende bevestigd.'};
 }

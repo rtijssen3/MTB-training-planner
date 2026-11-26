@@ -59,3 +59,52 @@ html{background:var(--bg)}body.l39-body{margin:0!important;background:var(--bg)!
 .l39-session-load{font-size:11px;font-weight:700;color:var(--text);font-variant-numeric:tabular-nums;text-align:center}.l39-week-load-summary{display:flex;flex-direction:column;gap:3px;text-align:right}.l39-week-load-summary strong{font-size:13px;color:var(--text)}.l39-week-load-summary small{font-size:11px;color:var(--muted)}.l39-capacity-warning{font-size:11px;color:var(--orange);text-align:center}.l39-week-footer{align-items:flex-start}
 
 .feedback-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;margin:12px 0}.feedback-advice{display:flex;flex-direction:column;gap:4px;border:1px solid var(--line);background:var(--surface2);border-radius:8px;padding:10px}.feedback-advice strong{font-size:13px}.feedback-advice span{font-weight:700;color:var(--accent);font-size:12px}.feedback-advice small,.feedback-history-row small{display:block;color:var(--muted);font-size:11px;line-height:1.4}.feedback-history{display:flex;flex-direction:column;gap:6px}.feedback-history-row{display:grid;grid-template-columns:1fr minmax(180px,240px);align-items:center;gap:10px;border-top:1px solid var(--line);padding:9px 0}.feedback-history-row label{display:flex;flex-direction:column;gap:4px;font-size:11px;color:var(--muted)}@media(max-width:600px){.feedback-history-row{grid-template-columns:1fr}}
+
+/* v1.1 mobile month grid: keep desktop calendar intact. */
+.l39-mobile-calendar{display:none}
+@media(max-width:780px){
+.l39-calendar-panel{overflow:hidden!important;min-width:0;width:100%;box-sizing:border-box}
+.l39-calendar-panel>.l39-cal-head,.l39-calendar-panel>#l39-calendar-grid,.l39-calendar-panel>.l39-legend{display:none}
+.l39-mobile-calendar{display:block;min-width:0}
+.l39-mobile-month{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:3px;min-width:0}
+.l39-mobile-weekday{text-align:center;font-size:11px;color:var(--muted);font-weight:700;padding:8px 0}
+.l39-body .l39-mobile-day{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-width:0;min-height:48px;padding:3px 0;border:0;background:transparent;color:var(--text);border-radius:8px;font-weight:700}
+.l39-mobile-day.outside{opacity:.45}
+.l39-mobile-date{display:grid;place-items:center;width:30px;height:30px;border-radius:50%}
+.l39-mobile-day.today .l39-mobile-date{outline:1px solid var(--accent)}
+.l39-mobile-day.selected .l39-mobile-date{background:var(--accent);color:#13251e}
+.l39-mobile-dots{display:flex;justify-content:center;gap:4px;min-height:7px}
+.l39-mobile-dot{display:inline-block;width:7px;height:7px;border-radius:50%;flex:none}
+.l39-mobile-dot.done{background:#4285df}.l39-mobile-dot.planned{background:#26a269}
+.l39-mobile-legend{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;font-size:11px;color:var(--muted);margin:12px 0}
+.l39-mobile-details{border-top:1px solid var(--line);padding-top:12px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.l39-mobile-week-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;text-align:center;border-bottom:1px solid var(--line);padding-bottom:12px}
+.l39-mobile-week-stats>div{display:flex;flex-direction:column;gap:4px;min-width:0}
+.l39-mobile-week-stats small{font-size:11px;color:var(--muted);overflow-wrap:anywhere}
+.l39-mobile-week-stats strong{font-size:25px;font-variant-numeric:tabular-nums}
+.l39-mobile-week-stats .done strong{color:#4285df}.l39-mobile-week-stats .planned strong{color:#26a269}
+.l39-mobile-details :is(.l39-planned-chip,.l39-activity-chip){width:100%;padding:12px;box-sizing:border-box}
+.l39-mobile-details :is(.l39-planned-chip,.l39-activity-chip) b{font-size:13px;white-space:normal}.l39-mobile-details :is(.l39-planned-chip,.l39-activity-chip) span{font-size:12px}
+}
+
+/* v1.1 dashboard evaluation, same palette and spacing as upcoming workouts. */
+.l39-completed-heading{margin-top:22px;border-top:1px solid var(--line);padding-top:16px}
+.l39-completed-workouts{display:flex;flex-direction:column;gap:12px;min-width:0}
+.l39-completed-card{border:1px solid var(--line);background:var(--surface2);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.l39-completed-top{display:flex;gap:10px;align-items:center;min-width:0}
+.l39-completed-check{color:var(--green);font-weight:800;font-size:20px;margin-left:auto}
+.l39-evaluation-table{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed;margin:0}
+.l39-evaluation-table :is(th,td){padding:7px 3px;border-bottom:1px solid var(--line);text-align:right;overflow-wrap:anywhere}
+.l39-evaluation-table th:first-child{text-align:left}
+.l39-evaluation-table thead th{color:var(--muted);font-size:11px;font-weight:600}
+.l39-inline-evaluation[hidden]{display:none!important}
+.l39-inline-evaluation{border-top:1px solid var(--line);padding-top:10px}
+.l39-evaluation-form{display:flex;flex-direction:column;gap:10px;margin:0}
+.l39-evaluation-options{border:0;min-width:0;padding:0;margin:0;display:flex;flex-direction:column;gap:8px}
+.l39-evaluation-options label{display:flex;align-items:center;gap:6px;font-size:13px}
+.l39-evaluation-options input{width:auto;accent-color:var(--accent)}
+.l39-evaluation-advice{border:1px solid var(--line);padding:10px;border-radius:8px}
+.l39-evaluation-advice p{margin:5px 0 0}
+.l39-evaluation-toggle{width:100%}
+
+.l39-skill-legend{display:flex;flex-wrap:wrap;gap:14px;font-size:12px;margin-bottom:8px}.l39-skill-legend .goal{color:#26a269}.l39-skill-legend .current{color:#4285df}.l39-skill-pair{padding:8px 0;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:4px;min-width:0}.l39-skill-pair strong{font-size:13px}.l39-skill-bar-row{display:grid;grid-template-columns:minmax(0,1fr) 42px;gap:8px;align-items:center;font-size:12px}.l39-skill-bar-row>span:last-child{text-align:right}.l39-skill-bar-row meter{width:100%;height:12px;appearance:none;-webkit-appearance:none;accent-color:#26a269}.l39-skill-bar-row.current meter{accent-color:#4285df}.l39-skill-bar-row meter::-webkit-meter-bar{background:var(--line);border:0;border-radius:4px}.l39-skill-bar-row.goal meter::-webkit-meter-optimum-value{background:#26a269;border-radius:4px}.l39-skill-bar-row.current meter::-webkit-meter-optimum-value{background:#4285df;border-radius:4px}.l39-skill-bar-row.goal meter::-moz-meter-bar{background:#26a269}.l39-skill-bar-row.current meter::-moz-meter-bar{background:#4285df}.l39-skill-pair .l39-caption{overflow-wrap:anywhere}

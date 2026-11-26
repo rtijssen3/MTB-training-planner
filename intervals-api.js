@@ -118,3 +118,9 @@ export async function exportIntervalsWorkout({date,title,description}){
  const data=await invokeIntervals({action:'export-workout',date,title,description});
  if(data?.exported!==true||data?.id==null)throw Error('Export niet bevestigd; controleer Intervals.icu voordat je opnieuw probeert.');return data;
 }
+
+export async function fetchSkillHistory(oldest,newest){
+ const data=await invokeIntervals({action:'skill-history',oldest,newest});
+ if(data?.provider!=='intervals.icu'||data.oldest!==oldest||data.newest!==newest||!Array.isArray(data.records))throw Error('Onverwacht vaardigheidsantwoord. Controleer de versie van de Supabase Edge Function.');
+ return data.records;
+}

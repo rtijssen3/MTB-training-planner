@@ -36,13 +36,13 @@ test('login, immediate discipline response, saved plan, reload and logout',async
  await expect(page.locator('#login-section')).toBeVisible();
  expect(errors).toEqual([]);
 });
-test('proposal retains fixed group, shows partial TSS, and manual zero-day override works',async({page})=>{
+test('proposal retains fixed group, includes estimated TSS, and manual zero-day override works',async({page})=>{
  await login(page);await plan(page);
  await page.locator('#l39-propose').click();
  await expect(page.locator('#l39-plan-status')).toContainText('trainingen voorgesteld');
  const group=page.locator('.l39-week-card').first().locator('button[data-date="2026-11-29"]');
  await expect(group).toHaveText('Groepsrit');
- await expect(page.locator('.l39-week-load-summary').first()).toContainText(/Workouts: \d+ TSS \+ 1 onbekend/);
+ await expect(page.locator('.l39-week-load-summary strong').first()).toHaveText(/^Workouts: \d+ TSS$/);
  await expect(page.locator('.l39-week-card').first().locator('.l39-session-load').first()).toContainText('TSS');
  await page.locator('.l39-week-card').first().locator('button[data-date="2026-11-27"]').click();
  await expect(page.locator('#l39-workout-dialog')).toBeVisible();
@@ -53,9 +53,13 @@ test('proposal retains fixed group, shows partial TSS, and manual zero-day overr
  await expect(page.locator('#l39-workout-dialog')).not.toBeVisible();
  await expect(page.locator('.l39-week-card').first().locator('button[data-date="2026-11-27"]')).toHaveText('Duur Z2');
  await expect(page.locator('.l39-capacity-warning').first()).toContainText('Handmatig boven beschikbaarheid');
+ await page.locator('#l39-propose').click();await expect(page.locator('#l39-plan-status')).toContainText('handmatig aangepaste dag(en) behouden');
+ await expect(page.locator('.l39-week-card').first().locator('button[data-date="2026-11-27"]')).toHaveText('Duur Z2');
+ await page.reload();await expect(page.locator('.l39-week-card')).toHaveCount(2);
+ await page.locator('.l39-week-card').first().locator('button[data-date="2026-11-27"]').click();await expect(page.locator('#l39-workout-duration')).toHaveValue('60');await page.locator('#l39-workout-dialog [data-action=close-dialog]').first().click();
  await page.locator('[data-tab=calendar]').click();
  await expect(page.locator('#l39-calendar-grid')).not.toBeEmpty();
- await expect(page.locator('.l39-week-summary-head')).toBeVisible();
+ if(await page.locator('#l39-mobile-calendar').isVisible()){await expect(page.locator('#l39-mobile-calendar')).toContainText('Geplande workouts');await page.locator('#l39-mobile-calendar button[data-date="2026-11-29"]').first().click();await expect(page.locator('.l39-mobile-details')).toContainText('Groepsrit');expect(await page.locator('.l39-calendar-panel').evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);}else await expect(page.locator('.l39-week-summary-head')).toBeVisible();
 });
 test('theme survives reload and cloud sync uses mock only',async({page})=>{
  await login(page);await plan(page);
@@ -83,4 +87,39 @@ test('a second automatic save during cloud upload is not lost',async({page})=>{
  await expect.poll(()=>page.evaluate(()=>window.__testCloudSnapshot?.plan?.discipline)).toBe('gravel');
  await page.locator('#l39-settings-link').click();
  await expect(page.locator('#l39-cloud-status')).toHaveText('Cloudopslag bevestigd.');
+});
+
+test('new browser storage restores cloud plan automatically at login',async({page})=>{
+ await login(page);await plan(page);await page.locator('#l39-settings-link').click();await page.locator('#l39-cloud-sync').click();await expect(page.locator('#l39-cloud-status')).toHaveText('Cloudopslag bevestigd.');
+ await page.locator('#logout-button').click();await page.evaluate(()=>localStorage.clear());await page.reload();await login(page);
+ await page.locator('[data-tab=plan]').click();await expect(page.locator('.l39-timeline-week')).toHaveCount(12);
+});
+
+test('today completed ride moves out of upcoming and evaluation persists',async({page})=>{
+ await login(page);await plan(page);
+ await page.locator('.l39-week-card').first().locator('button[data-date="2026-11-25"]').click();
+ await page.locator('#l39-workout-type').selectOption('threshold');await page.locator('#l39-workout-duration').fill('60');await page.locator('#l39-workout-protocol').selectOption('progressive');await page.locator('#l39-workout-level').selectOption('1');await page.locator('#l39-workout-form button[type=submit]').click();
+ await expect(page.locator('#l39-workout-dialog')).not.toBeVisible();await page.locator('[data-tab=dashboard]').click();
+ await expect(page.locator('#l39-upcoming button[data-date="2026-11-25"]')).toHaveCount(1);
+ await page.evaluate(()=>sessionStorage.setItem('fake-activities',JSON.stringify([{id:'ride-today',start_date_local:'2026-11-25T10:00:00',name:'Threshold test',type:'Ride',moving_time:3780,icu_training_load:79}])));
+ await page.locator('#l39-dashboard-refresh').click();await expect(page.locator('#l39-upcoming button[data-date="2026-11-25"]')).toHaveCount(0);
+ const card=page.locator('#l39-completed-workouts .l39-completed-card');await expect(card).toContainText('Threshold test');await expect(card).toContainText('79');
+ await card.getByRole('button',{name:'Evalueer workout'}).click();await card.getByLabel('Te zwaar',{exact:true}).check();await card.getByRole('button',{name:'Evaluatie bewaren'}).click();await expect(card).toContainText('Evaluatie bewaard');
+ await page.reload();await expect(page.locator('#l39-completed-workouts')).toContainText('Beoordeling: Te zwaar');
+ await page.locator('[data-tab=plan]').click();await page.locator('#l39-analyze-feedback').click();await expect(page.locator('#l39-feedback-list')).toContainText('Laatste sessie als te zwaar beoordeeld');
+});
+test('multiple rides do not falsely map to planned intervals',async({page})=>{
+ await login(page);await plan(page);await page.locator('.l39-week-card').first().locator('button[data-date="2026-11-25"]').click();await page.locator('#l39-workout-type').selectOption('endurance');await page.locator('#l39-workout-form button[type=submit]').click();await expect(page.locator('#l39-workout-dialog')).not.toBeVisible();
+ await page.evaluate(()=>window.__testActivities=[{id:'a',start_date_local:'2026-11-25T08:00:00',name:'Ride A',type:'Ride',moving_time:3600,icu_training_load:40},{id:'b',start_date_local:'2026-11-25T10:00:00',name:'Ride B',type:'Ride',moving_time:3600,icu_training_load:40}]);await page.locator('[data-tab=dashboard]').click();
+ await expect(page.locator('.l39-completed-card')).toHaveCount(2);await page.locator('.l39-completed-card').first().getByRole('button',{name:'Evalueer workout'}).click();await expect(page.locator('.l39-completed-card').first()).toContainText('Geen niveauadvies mogelijk');await expect(page.locator('.l39-completed-card').first().getByRole('button',{name:'Evaluatie bewaren'})).toHaveCount(0);
+});
+
+test('five skills, paired bars, performance profile and legacy discipline migration',async({page})=>{
+ await login(page);await plan(page);
+ await expect(page.locator('#l39-discipline option')).toHaveCount(3);
+ await expect(page.locator('#l39-skill-priorities .goal meter')).toHaveCount(5);
+ await page.evaluate(()=>{window.__testSkillRecords=[{date:'2026-11-20',watts:{5:900,15:750,30:550,60:450,300:320,1200:270},weight:75,duration:8000,powerMeter:true,hr:130,ftp:280,avgPower:180,np:184,decoupling:4},{date:'2026-11-10',duration:8000,powerMeter:true,hr:130,ftp:280,avgPower:180,np:183,decoupling:5},{date:'2026-06-01',watts:{5:1000,15:800,30:600,60:500,300:340,1200:290},weight:75}];});
+ await page.locator('#l39-analyze-limiters').click();await expect(page.locator('#l39-skill-priorities .current meter')).toHaveCount(5);await expect(page.locator('#l39-skill-priorities')).toContainText('decoupling');
+ await page.locator('#l39-plan-save').click();await page.reload();await expect(page.locator('#l39-skill-priorities .current meter')).toHaveCount(5);
+ await page.evaluate(()=>{const k='mtb-mesocycle:v2:synthetic-test-user',p=JSON.parse(localStorage.getItem(k));p.discipline='xcm';p.limiter='force';localStorage.setItem(k,JSON.stringify(p));});await page.reload();await expect(page.locator('#l39-discipline')).toHaveValue('gravel');await expect(page.locator('#l39-limiter')).toHaveValue('auto');
 });

@@ -16,3 +16,8 @@ test("old history does not raise",()=>assert.ok((()=>recommendLevel('threshold',
 test("future or current day ignored",()=>assert.ok((()=>recommendLevel('threshold',3,[{...latest,date:'2026-11-25'}],'2026-11-25').level===1)()));
 test("skill type not inferred from power",()=>assert.ok((()=>evaluateExecution({...session,type:'skills'},workout,rides,detail).evidence==='unknown')()));
 test("select only non-group recent sessions",()=>assert.ok((()=>selectRecentSessions([[session,{...session,date:'2026-11-21',group:true}]],'2026-11-01','2026-11-24').length===1)()));
+
+test('same-day confirmed hard feedback lowers future proposed level',()=>{const row=evaluateExecution({...session,feedback:'hard',feedbackActivityId:'a'},workout,rides,detail);assert.equal(row.completed,true);assert.equal(recommendLevel('threshold',3,[row],session.date).level,1);});
+test('same-day easy cannot increase without recovery time',()=>{const row={...latest,date:'2026-11-25',rating:'easy',completed:true};assert.equal(recommendLevel('threshold',3,[row,previous],'2026-11-25').level,2);assert.equal(recommendLevel('threshold',3,[row,previous],'2026-11-26').level,3);});
+test('rating is not transferred to an unrelated ride',()=>{const row=evaluateExecution({...session,feedback:'hard',feedbackActivityId:'b'},workout,rides,detail);assert.equal(row.rating,null);});
+test('ambiguous or missing activity cannot carry feedback into progression',()=>{const row=evaluateExecution({...session,feedback:'hard'},workout,[...rides,{id:'b'}],detail);assert.equal(row.completed,false);assert.equal(row.rating,null);assert.equal(recommendLevel('threshold',3,[row],'2026-11-25').decision,'start');});

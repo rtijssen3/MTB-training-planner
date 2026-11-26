@@ -3,7 +3,7 @@ export function createCloudSync({supabase,storage,user,isCurrent=()=>true,canDow
  const key='mtb-cloud-baseline:v1:'+user;
  const baseline=()=>{try{return JSON.parse(storage.getItem(key)||'null')}catch{return null}};
  let busy=false;
- async function sync({allowDownload=true,resolveConflict=null}={}){
+ async function sync({allowDownload=true,resolveConflict=null,downloadOnly=false}={}){
    if(busy)throw Error('Synchronisatie loopt al.');
    busy=true;
    try{
@@ -17,6 +17,7 @@ export function createCloudSync({supabase,storage,user,isCurrent=()=>true,canDow
      if(action==='conflict'&&['local','remote'].includes(resolveConflict))action=resolveConflict==='local'?'upload':'download';
      if(action==='conflict')throw Error('Cloud en lokale planner verschillen. Geen gegevens overschreven. Maak een back-up en kies in Instellingen welke versie je wilt behouden.');
      if(action==='download'&&!allowDownload)throw Error('Nieuwere cloudversie beschikbaar. Open Instellingen en synchroniseer eerst.');
+     if(action==='upload'&&downloadOnly)return 'localOnly';
      if(action==='upload'){
        storage.setItem('mtb-cloud-backup:v1:'+user,JSON.stringify(local));
        const {error:err}=await supabase.rpc('save_training_planner_state',{p_snapshot:local,p_expected_revision:data?.revision??0});

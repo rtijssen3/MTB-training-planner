@@ -8,6 +8,7 @@ export function validateSnapshot(s){
    const first=new Date(start+'T00:00:00Z');if(!Number.isFinite(+first)||first.toISOString().slice(0,10)!==start||first.getUTCDay()!==1)throw Error('Ongeldige weekstart.');
    const end=new Date(+first+6*86400000).toISOString().slice(0,10),seen=new Set();
    for(const a of week.sessions){if(!a||a.date<start||a.date>end||!/^\d{4}-\d{2}-\d{2}$/.test(a.date)||seen.has(a.date)||!['endurance','threshold','vo2max','force','skills','anaerobic','power','group'].includes(a.type)||!Number.isInteger(a.durationMinutes)||a.durationMinutes<15||a.durationMinutes>360)throw Error('Ongeldige workout.');seen.add(a.date);}
+   if(week.manualRestDates!==undefined){const rest=week.manualRestDates;if(!Array.isArray(rest)||new Set(rest).size!==rest.length||rest.some(d=>typeof d!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(d)||d<start||d>end||seen.has(d)))throw Error('Ongeldige handmatige rustdagen.');}
  }
  return s;
 }
