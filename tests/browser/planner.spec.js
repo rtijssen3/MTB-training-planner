@@ -94,3 +94,22 @@ test('new browser storage restores cloud plan automatically at login',async({pag
  await page.locator('#logout-button').click();await page.evaluate(()=>localStorage.clear());await page.reload();await login(page);
  await page.locator('[data-tab=plan]').click();await expect(page.locator('.l39-timeline-week')).toHaveCount(12);
 });
+
+test('today completed ride moves out of upcoming and evaluation persists',async({page})=>{
+ await login(page);await plan(page);
+ await page.locator('.l39-week-card').first().locator('button[data-date="2026-11-25"]').click();
+ await page.locator('#l39-workout-type').selectOption('threshold');await page.locator('#l39-workout-duration').fill('60');await page.locator('#l39-workout-protocol').selectOption('progressive');await page.locator('#l39-workout-level').selectOption('1');await page.locator('#l39-workout-form button[type=submit]').click();
+ await expect(page.locator('#l39-workout-dialog')).not.toBeVisible();await page.locator('[data-tab=dashboard]').click();
+ await expect(page.locator('#l39-upcoming button[data-date="2026-11-25"]')).toHaveCount(1);
+ await page.evaluate(()=>sessionStorage.setItem('fake-activities',JSON.stringify([{id:'ride-today',start_date_local:'2026-11-25T10:00:00',name:'Threshold test',type:'Ride',moving_time:3780,icu_training_load:79}])));
+ await page.locator('#l39-dashboard-refresh').click();await expect(page.locator('#l39-upcoming button[data-date="2026-11-25"]')).toHaveCount(0);
+ const card=page.locator('#l39-completed-workouts .l39-completed-card');await expect(card).toContainText('Threshold test');await expect(card).toContainText('79');
+ await card.getByRole('button',{name:'Evalueer workout'}).click();await card.getByLabel('Te zwaar',{exact:true}).check();await card.getByRole('button',{name:'Evaluatie bewaren'}).click();await expect(card).toContainText('Evaluatie bewaard');
+ await page.reload();await expect(page.locator('#l39-completed-workouts')).toContainText('Beoordeling: Te zwaar');
+ await page.locator('[data-tab=plan]').click();await page.locator('#l39-analyze-feedback').click();await expect(page.locator('#l39-feedback-list')).toContainText('Laatste sessie als te zwaar beoordeeld');
+});
+test('multiple rides do not falsely map to planned intervals',async({page})=>{
+ await login(page);await plan(page);await page.locator('.l39-week-card').first().locator('button[data-date="2026-11-25"]').click();await page.locator('#l39-workout-type').selectOption('endurance');await page.locator('#l39-workout-form button[type=submit]').click();await expect(page.locator('#l39-workout-dialog')).not.toBeVisible();
+ await page.evaluate(()=>window.__testActivities=[{id:'a',start_date_local:'2026-11-25T08:00:00',name:'Ride A',type:'Ride',moving_time:3600,icu_training_load:40},{id:'b',start_date_local:'2026-11-25T10:00:00',name:'Ride B',type:'Ride',moving_time:3600,icu_training_load:40}]);await page.locator('[data-tab=dashboard]').click();
+ await expect(page.locator('.l39-completed-card')).toHaveCount(2);await page.locator('.l39-completed-card').first().getByRole('button',{name:'Evalueer workout'}).click();await expect(page.locator('.l39-completed-card').first()).toContainText('Geen niveauadvies mogelijk');await expect(page.locator('.l39-completed-card').first().getByRole('button',{name:'Evaluatie bewaren'})).toHaveCount(0);
+});

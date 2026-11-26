@@ -1,5 +1,5 @@
 import {createLocalPlannerStore} from './src/data/local-planner-store.js';
-import {TYPES as FEEDBACK_TYPES,evaluateExecution,recommendLevel,selectRecentSessions} from './src/engine/workout-feedback.js';
+import {TYPES as FEEDBACK_TYPES,RATINGS,activityMatches,isCyclingActivity,evaluateExecution,recommendLevel,selectRecentSessions} from './src/engine/workout-feedback.js';
 import {formatIntensityMinutes,summarizePlannedLoads,manualWorkoutValidation} from './src/core/workout-display.js';
 import {workoutText} from './src/workouts/export.js';
 import {createCloudSync} from './src/data/cloud-sync.js';
@@ -33,14 +33,14 @@ const monthLabel=(y,m)=>new Intl.DateTimeFormat('nl-NL',{month:'long',year:'nume
 const nowKey=()=>dateKey(today());
 const fixedLabel=value=>{const t=String(value||'').trim();return isGroupRide(t)?'Groepsrit':t;};
 
-const app={feedbackRows:[],feedbackStatus:'',feedbackBusy:false,cloud:null,cloudBusy:false,cloudQueued:false,startupIssue:'',selectedCalendarDate:null,userId:null,plan:null,month:new Date(today().getFullYear(),today().getMonth(),1),focusedWeek:null,
+const app={evaluationToken:0,dashboardRecords:[],feedbackRows:[],feedbackStatus:'',feedbackBusy:false,cloud:null,cloudBusy:false,cloudQueued:false,startupIssue:'',selectedCalendarDate:null,userId:null,plan:null,month:new Date(today().getFullYear(),today().getMonth(),1),focusedWeek:null,
   availability:new Map(),activityCache:new Map(),wellness:null,activeTab:'dashboard',
   weekModal:null,workoutModal:null,renderNumber:0,authGeneration:0,activityError:null,planDirty:false,proposing:false,detailCache:new Map()};
 
 function status(id,message,kind='') {const el=$(id);if(!el)return;el.textContent=message;el.classList.toggle('is-error',kind==='error');el.classList.toggle('is-good',kind==='good');}
 function htmlNode(tag,cls,text){const el=document.createElement(tag);if(cls)el.className=cls;if(text!==undefined)el.textContent=String(text);return el;}
 function add(parent,tag,cls,text){const node=htmlNode(tag,cls,text);parent.appendChild(node);return node;}
-function cleanUser(){app.weekModal=null;app.workoutModal=null;app.proposing=false;app.focusedWeek=null;app.feedbackRows=[];app.feedbackStatus='';app.feedbackBusy=false;app.cloud=null;app.cloudBusy=false;app.cloudQueued=false;app.startupIssue='';app.selectedCalendarDate=null;for(const id of ['l39-cloud-sync','l39-cloud-local','l39-cloud-remote'])$(id).disabled=false;app.userId=null;app.plan=null;app.planDirty=false;app.activityCache.clear();app.detailCache.clear();app.availability.clear();app.wellness=null;app.activityError=null;app.authGeneration++;$('l39-dashboard-body').hidden=true;$('l39-calendar-grid').replaceChildren();$('l39-mobile-calendar').replaceChildren();$('l39-two-weeks').replaceChildren();$('l39-timeline').replaceChildren();$('l39-feedback-list').replaceChildren();$('l39-skill-priorities').replaceChildren();$('l39-feedback-status').textContent='';for(const d of document.querySelectorAll('dialog[open]'))d.close();}
+function cleanUser(){app.evaluationToken++;app.dashboardRecords=[];$('l39-completed-workouts').replaceChildren();app.weekModal=null;app.workoutModal=null;app.proposing=false;app.focusedWeek=null;app.feedbackRows=[];app.feedbackStatus='';app.feedbackBusy=false;app.cloud=null;app.cloudBusy=false;app.cloudQueued=false;app.startupIssue='';app.selectedCalendarDate=null;for(const id of ['l39-cloud-sync','l39-cloud-local','l39-cloud-remote'])$(id).disabled=false;app.userId=null;app.plan=null;app.planDirty=false;app.activityCache.clear();app.detailCache.clear();app.availability.clear();app.wellness=null;app.activityError=null;app.authGeneration++;$('l39-dashboard-body').hidden=true;$('l39-calendar-grid').replaceChildren();$('l39-mobile-calendar').replaceChildren();$('l39-two-weeks').replaceChildren();$('l39-timeline').replaceChildren();$('l39-feedback-list').replaceChildren();$('l39-skill-priorities').replaceChildren();$('l39-feedback-status').textContent='';for(const d of document.querySelectorAll('dialog[open]'))d.close();}
 const store=()=>createLocalPlannerStore(localStorage,app.userId,today);
 function localAvailability(){return store().localAvailability();}
 function setLocalAvailability(data){store().setLocalAvailability(data);}
@@ -144,7 +144,7 @@ async function loadDashboard(){
   const start=weekStartOf(today()),dates=weekDates(start);
   const {week,indicative}=effectivePlanWeek(app.plan,start,start);
   try{
-    const [available,activities]=await Promise.all([availabilityForWeek(start),getActivitiesRange(dates[0],dates[6])]);
+    const [available,activities]=await Promise.all([availabilityForWeek(start),getActivitiesRange(dates[0],dates[6],{force:true})]);
     if(generation!==app.authGeneration||view!==app.renderNumber)return;
     $('l39-current-week-label').textContent=`Week ${weekNumber(start)} · ${prettyDate(dates[0])} – ${prettyDate(dates[6])}`;
     $('l39-current-phase').textContent=week?.phase||'Geen fase';
@@ -161,11 +161,12 @@ async function loadDashboard(){
       (completed.missing?` · ${completed.missing} activiteiten zonder load`: '')+
       (!week?' · Stel een weekdoel in via Plan overview.':indicative?' · Weekdoel indicatief overgenomen uit de eerste mesocycleweek.':'');
     const upcoming=$('l39-upcoming');upcoming.replaceChildren();
-    const future=dates.filter(d=>d>=nowKey());
+    app.dashboardRecords=finished;
+    const future=dates.filter(d=>d>=nowKey()&&!finished.some(a=>a.date===d&&isCyclingActivity(a)));
     for(const key of future){
       const session=getSession(key);
       const fixed=fixedLabel(available[key]?.workout);
-      if(!session&&!fixed)continue;
+      if(!session&&(!fixed||store().manualRestDates(start).includes(key)))continue;
       const button=htmlNode('button','l39-upcoming-card');button.type='button';button.dataset.action='workout';button.dataset.date=key;
       const dateEl=add(button,'div','l39-upcoming-date');add(dateEl,'strong','',prettyDate(key).split(' ')[0]);add(dateEl,'small','',WEEKDAYS[weekDates(start).indexOf(key)]);
       const content=add(button,'div','l39-upcoming-body');add(content,'strong','',session?(session.group?'Groepsrit':typeLabel(session.type)):fixed);
@@ -174,11 +175,70 @@ async function loadDashboard(){
     }
     if(!upcoming.children.length){const empty=add(upcoming,'p','l39-caption','Er zijn deze week nog geen komende trainingen gepland.');
       const b=add(upcoming,'button','l39-secondary','Open Plan overview');b.type='button';b.dataset.action='go-plan';}
+    renderCompletedWorkouts(finished,week);
     $('l39-dashboard-body').hidden=false;
     status('l39-dashboard-status',app.startupIssue,app.startupIssue?'error':'');
     loadWellness(generation);
   }catch(e){if(generation!==app.authGeneration)return;status('l39-dashboard-status',`Dashboard: ${e.message}`,'error');$('l39-dashboard-body').hidden=true;}
 }
+
+function renderCompletedWorkouts(activities,week){
+  const host=$('l39-completed-workouts');host.replaceChildren();
+  for(const a of [...activities].sort((x,y)=>y.date.localeCompare(x.date))){
+    const card=add(host,'article','l39-completed-card'),top=add(card,'div','l39-completed-top'),date=add(top,'div','l39-upcoming-date');
+    add(date,'strong','',prettyDate(a.date).split(' ')[0]);add(date,'small','',WEEKDAYS[weekDates(weekStartOf(parseDate(a.date))).indexOf(a.date)]);
+    const content=add(top,'div','l39-upcoming-body');add(content,'strong','',a.name);add(content,'small','',`${a.date===nowKey()?'Vandaag':prettyDate(a.date)} · via Intervals.icu`);
+    const done=add(top,'span','l39-completed-check','✓');done.setAttribute('aria-label','Uitgevoerd');
+    const session=getSession(a.date),rides=activityMatches(session,activities),linked=!!session&&rides.length===1&&rides[0].id===a.id;
+    const info=linked?workoutInfo(session,week):null;
+    const comparison=add(card,'table','l39-evaluation-table'),head=add(comparison,'thead'),tr=add(head,'tr');
+    for(const h of ['','Gepland','Uitgevoerd']){const th=add(tr,'th','',h);th.scope='col';}
+    const body=add(comparison,'tbody');
+    const compare=(label,planned,actual)=>{const r=add(body,'tr');const h=add(r,'th','',label);h.scope='row';add(r,'td','',planned);add(r,'td','',actual);};
+    compare('Duur',linked?fmtMinutes(session.durationMinutes):'—',fmtMinutes(a.durationMinutes));
+    compare('TSS / Load',info?num(info.load):'—',num(a.trainingLoad));
+    const intervalCount=info?.workout?.steps.filter(s=>s.kind==='work').length??0;
+    if(intervalCount&&['threshold','vo2max','anaerobic','power'].includes(session?.type))compare('Intervallen',String(intervalCount),'Open evaluatie');
+    if(!linked)add(card,'p','l39-caption',session&&rides.length>1?'Meerdere fietsactiviteiten op deze dag; geen automatische koppeling.':'Geen eenduidig gekoppelde geplande workout.');
+    const rating=linked&&(!session.feedbackActivityId||session.feedbackActivityId===a.id)?session.feedback:null;
+    if(rating)add(card,'p','l39-caption','Beoordeling: '+({easy:'Te gemakkelijk',good:'Goed uitvoerbaar',hard:'Te zwaar',neutral:'Niet goed te beoordelen'})[rating]);
+    const toggle=add(card,'button','l39-secondary l39-evaluation-toggle',rating?'Bewerk evaluatie':'Evalueer workout');toggle.type='button';toggle.setAttribute('aria-expanded','false');
+    const panel=add(card,'div','l39-inline-evaluation');panel.hidden=true;
+    toggle.addEventListener('click',async()=>{
+      if(!panel.hidden){panel.hidden=true;toggle.setAttribute('aria-expanded','false');toggle.textContent=rating?'Bewerk evaluatie':'Evalueer workout';return;}
+      panel.hidden=false;toggle.setAttribute('aria-expanded','true');toggle.textContent='Sluit evaluatie';
+      const generation=app.authGeneration,token=app.evaluationToken;panel.replaceChildren();
+      if(!linked){add(panel,'p','l39-caption','Geen niveauadvies mogelijk zonder unieke koppeling met een bewaarde workout.');return;}
+      add(panel,'p','l39-caption','Uitvoering ophalen…');
+      let detail=null;
+      if(['threshold','vo2max','anaerobic','power'].includes(session.type)&&!session.group)try{detail=await fetchActivityDetailForPlanning(a.id);}catch{}
+      if(generation!==app.authGeneration||token!==app.evaluationToken||!panel.isConnected||panel.hidden)return;
+      const row=evaluateExecution(session,info?.workout,rides,detail);
+      panel.replaceChildren();
+      if(row.required)add(panel,'p','l39-caption',`Intervallen: ${row.evidence==='unknown'?'onbekend':row.matched+' / '+row.required} · ${row.reason}`);
+      else add(panel,'p','l39-caption',session.group?'Groepsrit: TSS is een Z2-schatting; geen niveauadvies.':session.type==='endurance'?'Duurtraining: beoordeling wordt bewaard, geen intervalniveau.':row.reason);
+      const form=add(panel,'form','l39-evaluation-form');add(form,'strong','','Hoe heb je de training ervaren?');
+      const choices=add(form,'fieldset','l39-evaluation-options');choices.setAttribute('aria-label','Eigen beoordeling');
+      const name='evaluation-'+a.id;
+      let selected=row.rating||'';
+      for(const [value,label] of [['easy','Te gemakkelijk'],['good','Goed uitvoerbaar'],['hard','Te zwaar'],['neutral','Niet goed te beoordelen']]){
+        const l=add(choices,'label'),input=add(l,'input');input.type='radio';input.name=name;input.value=value;input.checked=selected===value;input.required=true;l.append(document.createTextNode(' '+label));input.addEventListener('change',()=>{selected=value;updateAdvice();save.disabled=false;});
+      }
+      const advice=add(form,'div','l39-evaluation-advice');add(advice,'strong','','Trainingsadvies');const message=add(advice,'p','l39-caption');
+      const updateAdvice=()=>{message.textContent=(!session.group&&FEEDBACK_TYPES.includes(session.type)&&row.level)?({easy:'Mogelijk toe aan een hoger niveau. Eerdere workouts en herstel worden meegewogen.',good:'Huidig niveau lijkt passend. Progressie hangt af van eerdere workouts en herstel.',hard:'Volgend voorstel kan een lager niveau gebruiken; neem voldoende herstel.',neutral:'Geen verhoging op basis van deze beoordeling.'})[selected]||'Kies je eigen beoordeling.':'Beoordeling bewaren als trainingshistorie; geen automatisch intervalniveau voor dit type.';};updateAdvice();
+      const save=add(form,'button','l39-primary','Evaluatie bewaren');save.type='submit';save.disabled=!selected;
+      const messageEl=add(form,'p','l39-status');messageEl.setAttribute('role','status');
+      form.addEventListener('submit',e=>{e.preventDefault();if(generation!==app.authGeneration||!RATINGS.includes(selected))return;
+        const current=getSession(a.date),currentRides=activityMatches(current,app.dashboardRecords);
+        if(!current||currentRides.length!==1||currentRides[0].id!==a.id){messageEl.textContent='Koppeling is gewijzigd. Vernieuw het dashboard.';return;}
+        if(!saveFeedback(a.date,selected,a.id)){messageEl.textContent='Niet bewaard. Probeer opnieuw.';return;}
+        messageEl.textContent='Evaluatie bewaard. Volgende trainingsvoorstellen houden rekening met je beoordeling.';toggle.textContent='Sluit evaluatie';
+      });
+    });
+  }
+  if(!host.children.length)add(host,'p','l39-caption','Nog geen uitgevoerde trainingen deze week.');
+}
+
 async function loadWellness(generation){
   try{const current=today(),old=addDays(current,-27);const records=await fetchIntervalsWellness(dateKey(old),dateKey(current));
     if(generation!==app.authGeneration||!records?.length)return;
@@ -363,23 +423,23 @@ function renderFeedbackPanel(){
     add(left,'strong','',prettyDate(entry.date)+' · '+typeLabel(entry.type)+(entry.level?' · N'+entry.level:' · standaard'));
     add(left,'small','',entry.required?entry.matched+'/'+entry.required+' intervallen · '+entry.reason:entry.reason);
     const label=add(row,'label','','Eigen beoordeling');const select=add(label,'select');select.setAttribute('aria-label','Beoordeling '+entry.date);
-    for(const [value,name] of [['','Niet beoordeeld'],['good','Goed uitgevoerd en hersteld'],['hard','Te zwaar / onvoldoende hersteld'],['neutral','Niet goed te beoordelen']]){const o=add(select,'option','',name);o.value=value;}
+    for(const [value,name] of [['','Niet beoordeeld'],['easy','Te gemakkelijk'],['good','Goed uitvoerbaar'],['hard','Te zwaar / onvoldoende hersteld'],['neutral','Niet goed te beoordelen']]){const o=add(select,'option','',name);o.value=value;}
     select.value=entry.rating||'';
-    select.addEventListener('change',()=>saveFeedback(entry.date,select.value));
+    select.disabled=entry.completed!==true;select.addEventListener('change',()=>saveFeedback(entry.date,select.value,entry.activityId));
   }
 }
 async function refreshWorkoutFeedback({activities=null}={}){
   const generation=app.authGeneration;
   if(!app.userId)throw Error('Niet ingelogd.');
-  const end=dateKey(addDays(today(),-1)),start=dateKey(addDays(today(),-28));
+  const end=nowKey(),start=dateKey(addDays(today(),-28));
   const weeks=[];for(let d=monday(parseDate(start));dateKey(d)<=end;d=addDays(d,7))weeks.push(sessions(dateKey(d)));
   const recent=selectRecentSessions(weeks,start,end);
   const records=activities??await getActivitiesRange(start,end,{force:true});
   if(generation!==app.authGeneration)throw Error('Account gewijzigd.');
-  const cycling=records.filter(a=>['Ride','MountainBikeRide','GravelRide','VirtualRide'].includes(a.sport)&&a.date>=start&&a.date<=end);
+  const cycling=records.filter(a=>isCyclingActivity(a)&&a.date>=start&&a.date<=end);
   const rows=[];
   for(const s of recent){
-    const rides=cycling.filter(a=>a.date===s.date);
+    const rides=activityMatches(s,cycling);if(s.date===end&&!rides.length)continue;
     let detail=null;
     if(rides.length===1&&['threshold','vo2max','anaerobic','power'].includes(s.type))try{detail=await fetchActivityDetailForPlanning(rides[0].id);}catch{}
     if(generation!==app.authGeneration)throw Error('Account gewijzigd.');
@@ -397,14 +457,14 @@ async function analyzeWorkoutFeedback(){
   try{await refreshWorkoutFeedback();}catch(e){if(gen===app.authGeneration){app.feedbackRows=[];app.feedbackStatus='Analyse niet beschikbaar: '+e.message;renderFeedbackPanel();}}
   finally{if(gen===app.authGeneration){app.feedbackBusy=false;button.disabled=false;}}
 }
-function saveFeedback(date,value){
-  if(!app.userId||date>=nowKey()||!['','good','hard','neutral'].includes(value))return;
+function saveFeedback(date,value,activityId=null){
+  if(!app.userId||app.proposing||date>nowKey()||date===nowKey()&&!activityId||!['',...RATINGS].includes(value))return false;
   const start=weekStartOf(parseDate(date)),items=sessions(start),session=items.find(s=>s.date===date);
-  if(!session)return;
-  if(value)session.feedback=value;else delete session.feedback;
+  if(!session)return false;
+  if(value){session.feedback=value;if(activityId)session.feedbackActivityId=String(activityId);}else{delete session.feedback;delete session.feedbackActivityId;}
   storeSessions(start,items);
   const entry=app.feedbackRows.find(r=>r.date===date);if(entry)entry.rating=value||null;
-  renderFeedbackPanel();syncPlanner({automatic:true});
+  renderFeedbackPanel();syncPlanner({automatic:true});return true;
 }
 function weekWindowStart(){return app.focusedWeek||weekStartOf(today());}
 async function renderTwoWeeks(){
@@ -838,7 +898,7 @@ async function saveWorkout(event){
   else{
     const next={...s,type:s.type==='group'?'endurance':s.type,group:s.type==='group'};
     const changed=!previous||['type','group','durationMinutes','protocol','level','prescribedPhase'].some(k=>previous[k]!==next[k]);
-    all.push({...previous,...next,level:next.level,manual:changed||previous?.manual===true});
+    const saved={...previous,...next,level:next.level,manual:changed||previous?.manual===true};if(changed){delete saved.feedback;delete saved.feedbackActivityId;}all.push(saved);
   }
   storeSessions(start,all,{restDates});$('l39-workout-dialog').close();syncPlanner({automatic:true});
   if(app.activeTab==='calendar')loadCalendar();else if(app.activeTab==='dashboard')loadDashboard();else renderTwoWeeks();
@@ -884,6 +944,9 @@ function handleActions(event){
   if(action==='close-dialog')target.closest('dialog')?.close();
 }
 function registerListeners(){
+  // Refresh only while the dashboard is visible, never interrupt an open evaluation.
+  const refreshVisible=()=>{if(app.userId&&app.activeTab==='dashboard'&&!document.hidden&&!document.querySelector('.l39-inline-evaluation:not([hidden])')&&!document.querySelector('dialog[open]'))void loadDashboard();};
+  document.addEventListener('visibilitychange',refreshVisible);window.setInterval(refreshVisible,60000);
   for(const button of document.querySelectorAll('[data-tab]'))button.addEventListener('click',()=>setTab(button.dataset.tab));
   $('l39-settings-link').addEventListener('click',()=>setTab('settings'));
   $('l39-dashboard-refresh').addEventListener('click',()=>{app.activityCache.clear();app.detailCache.clear();app.availability.clear();loadDashboard()});

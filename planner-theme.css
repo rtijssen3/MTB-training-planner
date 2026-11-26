@@ -86,3 +86,23 @@ html{background:var(--bg)}body.l39-body{margin:0!important;background:var(--bg)!
 .l39-mobile-details :is(.l39-planned-chip,.l39-activity-chip){width:100%;padding:12px;box-sizing:border-box}
 .l39-mobile-details :is(.l39-planned-chip,.l39-activity-chip) b{font-size:13px;white-space:normal}.l39-mobile-details :is(.l39-planned-chip,.l39-activity-chip) span{font-size:12px}
 }
+
+/* v1.1 dashboard evaluation, same palette and spacing as upcoming workouts. */
+.l39-completed-heading{margin-top:22px;border-top:1px solid var(--line);padding-top:16px}
+.l39-completed-workouts{display:flex;flex-direction:column;gap:12px;min-width:0}
+.l39-completed-card{border:1px solid var(--line);background:var(--surface2);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.l39-completed-top{display:flex;gap:10px;align-items:center;min-width:0}
+.l39-completed-check{color:var(--green);font-weight:800;font-size:20px;margin-left:auto}
+.l39-evaluation-table{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed;margin:0}
+.l39-evaluation-table :is(th,td){padding:7px 3px;border-bottom:1px solid var(--line);text-align:right;overflow-wrap:anywhere}
+.l39-evaluation-table th:first-child{text-align:left}
+.l39-evaluation-table thead th{color:var(--muted);font-size:11px;font-weight:600}
+.l39-inline-evaluation[hidden]{display:none!important}
+.l39-inline-evaluation{border-top:1px solid var(--line);padding-top:10px}
+.l39-evaluation-form{display:flex;flex-direction:column;gap:10px;margin:0}
+.l39-evaluation-options{border:0;min-width:0;padding:0;margin:0;display:flex;flex-direction:column;gap:8px}
+.l39-evaluation-options label{display:flex;align-items:center;gap:6px;font-size:13px}
+.l39-evaluation-options input{width:auto;accent-color:var(--accent)}
+.l39-evaluation-advice{border:1px solid var(--line);padding:10px;border-radius:8px}
+.l39-evaluation-advice p{margin:5px 0 0}
+.l39-evaluation-toggle{width:100%}
