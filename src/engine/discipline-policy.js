@@ -5,7 +5,7 @@ const GOALS={xco:[100,95,100,100,95],road:[100,100,95,85,95],gravel:[100,100,90,
 export function normalizeDiscipline(d){return d==='xcm'?'gravel':Object.hasOwn(GOALS,d)?d:'xco';}
 export function normalizeLimiter(l){return ['auto','none',...ABILITIES.map(a=>a[0])].includes(l)?l:'auto';}
 export function disciplineTargets(d){return ABILITIES.map(([skill,label],i)=>({skill,label,target:GOALS[normalizeDiscipline(d)][i]}));}
-export function migrateDiscipline(plan){if(!plan)return plan;return {...plan,discipline:normalizeDiscipline(plan.discipline),limiter:normalizeLimiter(plan.limiter)};}
+export function migrateDiscipline(plan){if(!plan)return plan;return {...plan,...(plan.discipline===undefined?{}:{discipline:normalizeDiscipline(plan.discipline)}),...(plan.limiter===undefined?{}:{limiter:normalizeLimiter(plan.limiter)})};}
 const R={
  xco:{Base:[['force','threshold'],['threshold','force']],Build:[['vo2max','anaerobic','threshold','power'],['anaerobic','vo2max','power','threshold'],['vo2max','power','anaerobic','threshold'],['threshold','vo2max','anaerobic','power']],Peak:[['vo2max','anaerobic','threshold'],['anaerobic','vo2max','threshold']]},
  road:{Base:[['threshold','force'],['force','threshold']],Build:[['threshold','vo2max','power','anaerobic'],['vo2max','threshold','power','anaerobic'],['threshold','power','vo2max','anaerobic'],['power','threshold','vo2max','anaerobic']],Peak:[['threshold','power','vo2max'],['power','threshold','vo2max']]},
