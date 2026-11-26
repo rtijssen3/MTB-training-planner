@@ -2,7 +2,7 @@
 const user={id:'synthetic-test-user',email:'test@example.invalid'};
 const session={user,access_token:'fake'};
 let current=sessionStorage.getItem('fake-login')?session:null;
-let handlers=[],revision=0,remote=null;
+let handlers=[],revision=0,remote=JSON.parse(sessionStorage.getItem('fake-cloud')||'null');
 const weekdays=['Maandag','Dinsdag','Woensdag','Donderdag','Vrijdag','Zaterdag','Zondag'];
 let weekly=weekdays.map((weekday,i)=>({weekday,available_minutes:[0,90,120,90,0,60,180][i],fixed_workout:i===6?'Groepsrit':null}));
 const overrides=new Map();
@@ -24,7 +24,7 @@ export const supabase={
   if(name==='freeze_past_availability')return ok(null);
   if(name==='save_calendar_checked'){if(args.p_expected_revision!==revision)return {error:{message:'AVAILABILITY_CONFLICT'}};for(const c of args.p_changes){if(c.action==='delete')overrides.delete(c.date);else overrides.set(c.date,c);}return ok({saved_count:args.p_changes.length,revision:++revision});}
   if(name==='save_weekly_checked'){weekly=args.p_rows;return ok(++revision);}
-  if(name==='save_training_planner_state'){await new Promise(resolve=>setTimeout(resolve,700));if(args.p_expected_revision!==(remote?.revision??0))return {error:{message:'PLANNER_CONFLICT'}};remote={snapshot:args.p_snapshot,revision:(remote?.revision??0)+1};window.__testCloudSnapshot=remote.snapshot;return ok(remote.revision);}
+  if(name==='save_training_planner_state'){await new Promise(resolve=>setTimeout(resolve,700));if(args.p_expected_revision!==(remote?.revision??0))return {error:{message:'PLANNER_CONFLICT'}};remote={snapshot:args.p_snapshot,revision:(remote?.revision??0)+1};sessionStorage.setItem('fake-cloud',JSON.stringify(remote));window.__testCloudSnapshot=remote.snapshot;return ok(remote.revision);}
   return {data:null,error:{message:'Unexpected test RPC '+name}};
  },
  functions:{invoke:async(name,{body})=>{

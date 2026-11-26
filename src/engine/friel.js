@@ -37,17 +37,17 @@ export function skillWorkout({type,durationMinutes,ftp,phase='Opbouw'}){
  return {type,title:LABELS[SKILLS.indexOf(MAP[type])],durationMinutes,ftp,phase,protocol:'classic',steps,hardMinutes:steps.filter(s=>s.kind==='work'&&s.percentFtp>100).reduce((s,x)=>s+x.seconds,0)/60};
 }
 
-export function proposeSkillWeek({dates,availability,target,maxQuality=2,blocked=[],qualityTypes=[],phase='Build',loadFor,fixed=[]}){
+export function proposeSkillWeek({dates,availability,target,maxQuality=2,blocked=[],qualityTypes=[],phase='Build',loadFor,fixed=[],groupLoadFor=minutes=>loadFor('endurance',minutes)}){
  if(dates.length!==7||!Number.isFinite(target)||target<0||!Number.isInteger(maxQuality)||maxQuality<0||maxQuality>2)throw Error('Ongeldige planningsparameters');
- const slots=new Map(),busy=new Set(blocked),hard=[];let used=0;
+ const slots=new Map(),busy=new Set(blocked),hard=[];let used=0,unknownFixed=0;
  const cap=d=>Math.min(360,Math.floor((availability[d]?.available_minutes||0)/15)*15);
- const put=(i,type,minutes)=>{const date=dates[i],load=loadFor(type,minutes);if(!Number.isFinite(load)||load<0||used+load>target*([...slots.values()].some(s=>s.group)?.65:1)+.01)return false;slots.set(i,{date,type,durationMinutes:minutes,protocol:'classic'});used+=load;return true;};
- for(const date of new Set(fixed)){const i=dates.indexOf(date);if(i<0||cap(date)<15)continue;slots.set(i,{date,type:'endurance',group:true,durationMinutes:cap(date),protocol:'classic'});for(const j of [i-1,i,i+1])if(dates[j])busy.add(dates[j]);}
- const groups=slots.size,limit=phase==='Recovery'?0:Math.max(0,maxQuality-groups);
+ const put=(i,type,minutes)=>{const date=dates[i],load=loadFor(type,minutes);if(!Number.isFinite(load)||load<0||used+load>target+.01)return false;slots.set(i,{date,type,durationMinutes:minutes,protocol:'classic'});used+=load;return true;};
+ for(const date of new Set(fixed)){const i=dates.indexOf(date);if(i<0||cap(date)<15)continue;slots.set(i,{date,type:'endurance',group:true,durationMinutes:cap(date),protocol:'classic'});const load=groupLoadFor(cap(date));if(Number.isFinite(load)&&load>=0)used+=load;else unknownFixed++;for(const j of [i-1,i,i+1])if(dates[j])busy.add(dates[j]);}
+ const groups=slots.size,limit=phase==='Recovery'||unknownFixed?0:Math.max(0,maxQuality-groups);
  for(const type of qualityTypes){if(hard.length>=limit)break;for(const i of [1,3,2,5,0,4,6]){if(slots.has(i)||busy.has(dates[i])||cap(dates[i])<60||hard.some(j=>Math.abs(j-i)<2))continue;if(put(i,type,60)){hard.push(i);break;}}}
- for(const i of [6,2,5,1,3,0,4]){if(slots.size>=6||slots.has(i)||cap(dates[i])<45)continue;if(groups&&used>=target*.65)break;const type=phase==='Base'&&!Array.from(slots.values()).some(s=>s.type==='skills')&&i!==6?'skills':'endurance';put(i,type,45);}
- for(let pass=0;pass<150;pass++){let changed=false;for(const i of [6,2,5,1,3,0,4]){const s=slots.get(i);if(!s||s.group||s.type!=='endurance'||s.durationMinutes+15>cap(s.date))continue;const next=s.durationMinutes+15,delta=loadFor(s.type,next)-loadFor(s.type,s.durationMinutes);if(Number.isFinite(delta)&&delta>=0&&used+delta<=target*(groups?.65:1)+.01){s.durationMinutes=next;used+=delta;changed=true;break;}}if(!changed)break;}
- return {sessions:[...slots.values()].sort((a,b)=>a.date.localeCompare(b.date)),estimatedKnownLoad:used,unknownFixed:groups};
+ for(const i of [6,2,5,1,3,0,4]){if(slots.size>=6||slots.has(i)||cap(dates[i])<45)continue;if(unknownFixed||used>=target)break;const type=phase==='Base'&&!Array.from(slots.values()).some(s=>s.type==='skills')&&i!==6?'skills':'endurance';put(i,type,45);}
+ for(let pass=0;pass<150;pass++){let changed=false;for(const i of [6,2,5,1,3,0,4]){const s=slots.get(i);if(!s||s.group||s.type!=='endurance'||s.durationMinutes+15>cap(s.date))continue;const next=s.durationMinutes+15,delta=loadFor(s.type,next)-loadFor(s.type,s.durationMinutes);if(Number.isFinite(delta)&&delta>=0&&!unknownFixed&&used+delta<=target+.01){s.durationMinutes=next;used+=delta;changed=true;break;}}if(!changed)break;}
+ return {sessions:[...slots.values()].sort((a,b)=>a.date.localeCompare(b.date)),estimatedKnownLoad:used,unknownFixed};
 }
 
 export function recalculateExposure(analysis,discipline){

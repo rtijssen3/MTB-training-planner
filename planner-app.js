@@ -33,14 +33,14 @@ const monthLabel=(y,m)=>new Intl.DateTimeFormat('nl-NL',{month:'long',year:'nume
 const nowKey=()=>dateKey(today());
 const fixedLabel=value=>{const t=String(value||'').trim();return isGroupRide(t)?'Groepsrit':t;};
 
-const app={feedbackRows:[],feedbackStatus:'',feedbackBusy:false,cloud:null,cloudBusy:false,cloudQueued:false,userId:null,plan:null,month:new Date(today().getFullYear(),today().getMonth(),1),focusedWeek:null,
+const app={feedbackRows:[],feedbackStatus:'',feedbackBusy:false,cloud:null,cloudBusy:false,cloudQueued:false,startupIssue:'',selectedCalendarDate:null,userId:null,plan:null,month:new Date(today().getFullYear(),today().getMonth(),1),focusedWeek:null,
   availability:new Map(),activityCache:new Map(),wellness:null,activeTab:'dashboard',
   weekModal:null,workoutModal:null,renderNumber:0,authGeneration:0,activityError:null,planDirty:false,proposing:false,detailCache:new Map()};
 
 function status(id,message,kind='') {const el=$(id);if(!el)return;el.textContent=message;el.classList.toggle('is-error',kind==='error');el.classList.toggle('is-good',kind==='good');}
 function htmlNode(tag,cls,text){const el=document.createElement(tag);if(cls)el.className=cls;if(text!==undefined)el.textContent=String(text);return el;}
 function add(parent,tag,cls,text){const node=htmlNode(tag,cls,text);parent.appendChild(node);return node;}
-function cleanUser(){app.weekModal=null;app.workoutModal=null;app.proposing=false;app.focusedWeek=null;app.feedbackRows=[];app.feedbackStatus='';app.feedbackBusy=false;app.cloud=null;app.cloudBusy=false;app.cloudQueued=false;for(const id of ['l39-cloud-sync','l39-cloud-local','l39-cloud-remote'])$(id).disabled=false;app.userId=null;app.plan=null;app.planDirty=false;app.activityCache.clear();app.detailCache.clear();app.availability.clear();app.wellness=null;app.activityError=null;app.authGeneration++;$('l39-dashboard-body').hidden=true;$('l39-calendar-grid').replaceChildren();$('l39-two-weeks').replaceChildren();$('l39-timeline').replaceChildren();$('l39-feedback-list').replaceChildren();$('l39-skill-priorities').replaceChildren();$('l39-feedback-status').textContent='';for(const d of document.querySelectorAll('dialog[open]'))d.close();}
+function cleanUser(){app.weekModal=null;app.workoutModal=null;app.proposing=false;app.focusedWeek=null;app.feedbackRows=[];app.feedbackStatus='';app.feedbackBusy=false;app.cloud=null;app.cloudBusy=false;app.cloudQueued=false;app.startupIssue='';app.selectedCalendarDate=null;for(const id of ['l39-cloud-sync','l39-cloud-local','l39-cloud-remote'])$(id).disabled=false;app.userId=null;app.plan=null;app.planDirty=false;app.activityCache.clear();app.detailCache.clear();app.availability.clear();app.wellness=null;app.activityError=null;app.authGeneration++;$('l39-dashboard-body').hidden=true;$('l39-calendar-grid').replaceChildren();$('l39-mobile-calendar').replaceChildren();$('l39-two-weeks').replaceChildren();$('l39-timeline').replaceChildren();$('l39-feedback-list').replaceChildren();$('l39-skill-priorities').replaceChildren();$('l39-feedback-status').textContent='';for(const d of document.querySelectorAll('dialog[open]'))d.close();}
 const store=()=>createLocalPlannerStore(localStorage,app.userId,today);
 function localAvailability(){return store().localAvailability();}
 function setLocalAvailability(data){store().setLocalAvailability(data);}
@@ -175,7 +175,7 @@ async function loadDashboard(){
     if(!upcoming.children.length){const empty=add(upcoming,'p','l39-caption','Er zijn deze week nog geen komende trainingen gepland.');
       const b=add(upcoming,'button','l39-secondary','Open Plan overview');b.type='button';b.dataset.action='go-plan';}
     $('l39-dashboard-body').hidden=false;
-    status('l39-dashboard-status','');
+    status('l39-dashboard-status',app.startupIssue,app.startupIssue?'error':'');
     loadWellness(generation);
   }catch(e){if(generation!==app.authGeneration)return;status('l39-dashboard-status',`Dashboard: ${e.message}`,'error');$('l39-dashboard-body').hidden=true;}
 }
@@ -245,6 +245,51 @@ function renderCalendar(rows,activities,currentMonth,failed=false){
     }
     section.append(band,line);host.appendChild(section);
   }
+  renderMobileCalendar(rows,activities,currentMonth,failed);
+}
+
+
+// Compact calendar is a second presentation of the same saved sessions and actual loads.
+function renderMobileCalendar(rows,activities,currentMonth,failed=false){
+  const host=$('l39-mobile-calendar');host.replaceChildren();
+  const days=rows.flatMap(r=>r.days),currentDays=days.filter(d=>parseDate(d).getMonth()===currentMonth);
+  if(!currentDays.includes(app.selectedCalendarDate))app.selectedCalendarDate=currentDays.includes(nowKey())?nowKey():currentDays[0];
+  const byDate=new Map();for(const a of activities){if(!byDate.has(a.date))byDate.set(a.date,[]);byDate.get(a.date).push(a);}
+  const grid=add(host,'div','l39-mobile-month');
+  for(const label of WEEKDAYS)add(grid,'span','l39-mobile-weekday',label);
+  const details=htmlNode('section','l39-mobile-details');
+  function select(date){
+    app.selectedCalendarDate=date;for(const b of grid.querySelectorAll('button')){const selected=b.dataset.date===date;b.classList.toggle('selected',selected);b.setAttribute('aria-pressed',String(selected));}
+    details.replaceChildren();const row=rows.find(r=>r.days.includes(date));if(!row)return;
+    const {week,indicative}=effectivePlanWeek(app.plan,row.start,weekStartOf(today())),stat=weekSessionStats(row.start);
+    const done=sumKnownLoads(activities.filter(a=>a.date>=row.start&&a.date<=row.end).map(a=>({load:a.trainingLoad})));
+    add(details,'h3','',`Week ${row.number}`);
+    const stats=add(details,'div','l39-mobile-week-stats');
+    for(const [label,value,cls] of [['Uitgevoerde workouts',failed?'—':num(done.total)+(done.missing?' + ?':''),'done'],['Geplande workouts',stat.items.length?num(stat.total)+(stat.missing?' + ?':''):'—','planned'],['Weekdoel',week?num(week.targetLoad):'—','goal']]){
+      const cell=add(stats,'div',cls);add(cell,'small','',label);add(cell,'strong','',value);add(cell,'small','','TSS');
+    }
+    if(indicative)add(details,'p','l39-caption','Weekdoel indicatief.');
+    if(failed)add(details,'p','l39-caption','Uitgevoerde workouts niet beschikbaar.');
+    add(details,'h3','',prettyDate(date));
+    for(const a of byDate.get(date)||[]){
+      const b=add(details,'button','l39-activity-chip');b.type='button';b.dataset.action='completed';b.dataset.date=date;b.dataset.activityId=a.id;
+      add(b,'b','',a.name);add(b,'span','',`${fmtMinutes(a.durationMinutes)} · ${a.trainingLoad??'—'} TSS · Uitgevoerd`);
+    }
+    const s=getSession(date);
+    if(s){const b=add(details,'button','l39-planned-chip');b.type='button';b.dataset.action='workout';b.dataset.date=date;const info=workoutInfo(s,week);add(b,'b','',s.group?'Groepsrit':typeLabel(s.type));add(b,'span','',`${fmtMinutes(s.durationMinutes)} · ${info.load===null?'—':num(info.load)} TSS · Gepland`);if(date<nowKey())b.disabled=true;}
+    else if(!(byDate.get(date)||[]).length)add(details,'p','l39-caption','Geen geplande of uitgevoerde workouts.');
+    if(!s&&date>=nowKey()){const b=add(details,'button','l39-secondary','+ Plan');b.type='button';b.dataset.action='workout';b.dataset.date=date;}
+  }
+  for(const date of days){
+    const d=parseDate(date),b=add(grid,'button','l39-mobile-day');b.type='button';b.dataset.date=date;
+    if(d.getMonth()!==currentMonth)b.classList.add('outside');if(date===nowKey())b.classList.add('today');
+    add(b,'span','l39-mobile-date',d.getDate());const dots=add(b,'span','l39-mobile-dots');
+    const done=(byDate.get(date)||[]).length,planned=!!getSession(date);
+    if(done)add(dots,'i','l39-mobile-dot done');if(planned)add(dots,'i','l39-mobile-dot planned');
+    b.setAttribute('aria-label',`${date}${done?', uitgevoerd':''}${planned?', gepland':''}`);b.addEventListener('click',()=>select(date));
+  }
+  const legend=add(host,'div','l39-mobile-legend');for(const [label,cls] of [['Uitgevoerde workouts','done'],['Geplande workouts','planned']]){const item=add(legend,'span');add(item,'i','l39-mobile-dot '+cls);item.append(document.createTextNode(' '+label));}
+  host.append(details);select(app.selectedCalendarDate);
 }
 
 // PLAN OVERVIEW ---------------------------------------------------
@@ -300,7 +345,7 @@ function renderTimeline(){
     add(button,'small','',`W${w.week}`);add(button,'small','',w.phase==='Recovery'?'Herstel':'N'+progressionLevel(app.plan,w));button.title=`${w.phase} • week ${weekNumber(w.start)} • ${w.targetLoad} load • ${w.phase==='Recovery'?'herstel':'niveau '+progressionLevel(app.plan,w)}`;
   }
 }
-async function loadPlan(){if(!app.userId)return;renderTimeline();await renderTwoWeeks()}
+async function loadPlan(){if(!app.userId)return;renderTimeline();if(app.startupIssue)status('l39-plan-status',app.startupIssue,'error');await renderTwoWeeks()}
 function renderFeedbackPanel(){
   const host=$('l39-feedback-list');host.replaceChildren();
   const {week}=effectivePlanWeek(app.plan,weekWindowStart(),weekStartOf(today()));
@@ -539,10 +584,11 @@ async function proposeWeek(){
       const result=proposeSkillWeek({dates:weekDates(weekStart),availability:usable,target:groupOnly?0:remainingTarget,
         maxQuality:groupOnly?0:phasePolicy.maxQualitySessions,blocked:[...new Set([...phasePolicy.blockedQualityDates,...boundary])],
         qualityTypes:qualityOrder(app.plan.discipline,week.phase,app.plan.limiter,app.plan.limiterAnalysis,seen),phase:week.phase,
-        fixed:groups,
+        fixed:groups,groupLoadFor:durationMinutes=>workoutInfo({type:'endurance',group:true,durationMinutes},week).load??NaN,
         loadFor:(type,durationMinutes)=>{const k=type+':'+durationMinutes;if(!estimates.has(k))estimates.set(k,workoutInfo(candidateSession(type,durationMinutes,levelFor(type),week.phase),week).load??NaN);return estimates.get(k);}
       });
-      if(result.unknownFixed)warnings.push('Groepsrit behouden; onbekende load en herstel conservatief behandeld.');
+      if(result.unknownFixed)warnings.push('Een vaste groepsrit heeft geen geldige TSS-schatting.');
+      if(groups.length)warnings.push('Groepsrit meegerekend als Z2-schatting; herstel conservatief behandeld.');
       const suggestions=result.sessions
         .filter(s=>s.date>=now && !occupiedDates.includes(s.date))
         .map(s=>({date:s.date,...candidateSession(s.type,s.durationMinutes,levelFor(s.type),week.phase),group:!!s.group}));
@@ -596,7 +642,7 @@ function generatePlan(event){
   }catch(e){status('l39-plan-status',e.message,'error')}
 }
 function cloudEnabled(){return !!app.userId&&localStorage.getItem('mtb-cloud-enabled:'+app.userId)==='1';}
-async function syncPlanner({automatic=false,resolveConflict=null}={}){
+async function syncPlanner({automatic=false,resolveConflict=null,startup=false}={}){
   if(!app.cloud||automatic&&!cloudEnabled())return;
   if(app.cloudBusy){if(automatic)app.cloudQueued=true;return;}
   if(app.planDirty&&!automatic){status('l39-cloud-status','Bewaar eerst je mesocycle.','error');return;}
@@ -605,11 +651,11 @@ async function syncPlanner({automatic=false,resolveConflict=null}={}){
   app.cloudBusy=true;app.cloudQueued=false;status('l39-cloud-status','Synchroniseren…');
   for(const id of ['l39-cloud-sync','l39-cloud-local','l39-cloud-remote'])$(id).disabled=true;
   try{
-    const result=await client.sync({allowDownload:!automatic,resolveConflict});
+    const result=await client.sync({allowDownload:!automatic,resolveConflict,downloadOnly:startup});
     if(generation!==app.authGeneration)return;
-    if(result==='download'){app.plan=readPlan();app.planDirty=false;fillPlanForm(app.plan);setTab(app.activeTab);}
-    status('l39-cloud-status',({upload:'Cloudopslag bevestigd.',download:'Cloudversie opgehaald. Lokale back-up behouden.',same:'Lokaal en cloud zijn gelijk.',nothing:'Nog geen opgeslagen gegevens.'})[result],'good');
-  }catch(e){if(generation===app.authGeneration){status('l39-cloud-status',e.message,'error');if(automatic)status('l39-plan-status','Lokaal opgeslagen; cloud niet bevestigd: '+e.message,'error');}}
+    if(result==='download'){app.plan=readPlan();app.planDirty=false;fillPlanForm(app.plan);if(!startup)setTab(app.activeTab);}
+    app.startupIssue='';status('l39-cloud-status',({localOnly:'Lokale versie behouden; synchroniseer om deze naar de cloud te sturen.',upload:'Cloudopslag bevestigd.',download:'Cloudversie opgehaald. Lokale back-up behouden.',same:'Lokaal en cloud zijn gelijk.',nothing:'Nog geen opgeslagen gegevens.'})[result],'good');
+  }catch(e){if(generation===app.authGeneration){status('l39-cloud-status',e.message,'error');if(startup)app.startupIssue='Trainingsplan niet automatisch opgehaald: '+e.message;if(automatic)status('l39-plan-status','Lokaal opgeslagen; cloud niet bevestigd: '+e.message,'error');}}
   finally{if(generation===app.authGeneration){app.cloudBusy=false;for(const id of ['l39-cloud-sync','l39-cloud-local','l39-cloud-remote'])$(id).disabled=false;const queued=app.cloudQueued;app.cloudQueued=false;if(queued)void syncPlanner({automatic:true});}}
 }
 function savePlan(){
@@ -732,7 +778,7 @@ function previewWorkoutResult(){
   if(!app.workoutModal)throw new Error('Geen dag geselecteerd.');
   const s=readWorkoutControls();
   if(s.type==='rest')return {s,info:null};
-  if(s.type==='group')return {s,info:{load:null,workout:null,reason:'Groepsritten hebben geen vast vermogensprofiel. TSS wordt na uitvoering geregistreerd.'}};
+  if(s.type==='group')return {s,info:workoutInfo({...s,group:true},app.workoutModal.phase)};
   const old=app.workoutModal.saved;
   if(old&&old.type===s.type&&old.protocol===s.protocol&&old.level===s.level&&old.durationMinutes===s.durationMinutes&&old.prescribedPhase)s.prescribedPhase=old.prescribedPhase;
   return {s,info:workoutInfo(s,app.workoutModal.phase)};
@@ -746,6 +792,7 @@ function renderWorkoutPreview(){
   if(!progressive||$('l39-workout-protocol').value==='long'&&!['threshold','vo2max'].includes(type))$('l39-workout-protocol').value='classic';
   $('l39-workout-level').disabled=!progressive||$('l39-workout-protocol').value!=='progressive';
   $('l39-workout-duration').disabled=type==='rest';
+  $('l39-copy-workout').disabled=type==='group'||type==='rest';$('l39-export-workout').disabled=type==='group'||type==='rest';
   try{
     const {s,info}=previewWorkoutResult();
     const check=manualWorkoutValidation({type:s.type,durationMinutes:s.durationMinutes,capacity:app.workoutModal.capacity});
@@ -756,6 +803,7 @@ function renderWorkoutPreview(){
       add(steps,'p','l39-caption',info.reason);status('l39-workout-modal-status',info.reason);return;
     }
     $('l39-workout-tss').textContent=num(info.load);$('l39-workout-hard').textContent=formatIntensityMinutes(info.workout.hardMinutes);
+    if(s.type==='group')add(steps,'p','l39-caption','Z2-referentie voor TSS; de werkelijke groepsrit is variabel.');
     for(const step of info.workout.steps){
       const slot=add(host,'div','bar-slot');slot.style.flex=String(step.seconds);
       const bar=add(slot,'div',`bar ${step.kind}`);bar.style.setProperty('--bar-height',`${Math.max(8,step.percentFtp/200*100)}%`);
@@ -829,7 +877,7 @@ function registerListeners(){
   $('l39-dashboard-refresh').addEventListener('click',()=>{app.activityCache.clear();app.detailCache.clear();app.availability.clear();loadDashboard()});
   $('l39-month-prev').addEventListener('click',()=>{app.month=new Date(app.month.getFullYear(),app.month.getMonth()-1,1);loadCalendar()});
   $('l39-month-next').addEventListener('click',()=>{app.month=new Date(app.month.getFullYear(),app.month.getMonth()+1,1);loadCalendar()});
-  $('l39-month-today').addEventListener('click',()=>{app.month=new Date(today().getFullYear(),today().getMonth(),1);loadCalendar()});
+  $('l39-month-today').addEventListener('click',()=>{app.month=new Date(today().getFullYear(),today().getMonth(),1);app.selectedCalendarDate=nowKey();loadCalendar()});
   $('l39-plan-form').addEventListener('submit',generatePlan);$('l39-plan-save').addEventListener('click',savePlan);
   $('l39-current-weeks').addEventListener('click',()=>{app.focusedWeek=null;renderTimeline();renderTwoWeeks()});
   $('l39-propose').addEventListener('click',proposeWeek);
@@ -857,10 +905,10 @@ function registerListeners(){
     }catch(e){status('l39-plan-status',e.message,'error')}
   });
 }
-function setSignedIn(user){
+async function setSignedIn(user){
   if(app.userId===user.id)return;
   cleanUser();app.userId=user.id;const generation=app.authGeneration;app.cloud=createCloudSync({supabase,storage:localStorage,user:user.id,isCurrent:()=>generation===app.authGeneration,canDownload:()=>!app.planDirty});$('l39-cloud-enabled').checked=cloudEnabled();status('l39-cloud-status','');app.plan=readPlan();app.planDirty=false;app.focusedWeek=null;fillPlanForm(app.plan);
-  const tab=location.hash.slice(1);setTab(['dashboard','calendar','plan'].includes(tab)?tab:'dashboard');
+  const tab=location.hash.slice(1);await syncPlanner({startup:true});if(generation!==app.authGeneration)return;setTab(['dashboard','calendar','plan'].includes(tab)?tab:'dashboard');if(app.startupIssue)status('l39-cloud-status',app.startupIssue,'error');
 }
 async function initialize(){
   registerListeners();fillPlanForm(null);

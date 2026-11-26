@@ -21,3 +21,13 @@ test('changed local snapshot during lookup is never overwritten',async()=>{
  const client=createCloudSync({storage,user:'a',supabase:{from:()=>({select:()=>({eq:()=>({maybeSingle:async()=>{installSnapshot(storage,'a',two);return {data:remote,error:null};}})})})}});
  await assert.rejects(client.sync(),/Lokale wijzigingen/);assert.deepEqual(readSnapshot(storage,'a'),two);
 });
+
+test('startup read-only sync never uploads local-only changes',async()=>{
+ const storage=memory();installSnapshot(storage,'a',one);
+ const client=createCloudSync({storage,user:'a',supabase:{from:()=>({select:()=>({eq:()=>({maybeSingle:async()=>({data:null,error:null})})})}),rpc:()=>{throw Error('Unexpected upload');}}});
+ assert.equal(await client.sync({downloadOnly:true}),'localOnly');assert.deepEqual(readSnapshot(storage,'a'),one);
+});
+test('startup read-only sync downloads onto empty device',async()=>{
+ const storage=memory();const client=createCloudSync({storage,user:'a',supabase:{from:()=>({select:()=>({eq:()=>({maybeSingle:async()=>({data:remote,error:null})})})})}});
+ assert.equal(await client.sync({downloadOnly:true}),'download');assert.deepEqual(readSnapshot(storage,'a'),one);
+});

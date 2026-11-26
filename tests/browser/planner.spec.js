@@ -36,13 +36,13 @@ test('login, immediate discipline response, saved plan, reload and logout',async
  await expect(page.locator('#login-section')).toBeVisible();
  expect(errors).toEqual([]);
 });
-test('proposal retains fixed group, shows partial TSS, and manual zero-day override works',async({page})=>{
+test('proposal retains fixed group, includes estimated TSS, and manual zero-day override works',async({page})=>{
  await login(page);await plan(page);
  await page.locator('#l39-propose').click();
  await expect(page.locator('#l39-plan-status')).toContainText('trainingen voorgesteld');
  const group=page.locator('.l39-week-card').first().locator('button[data-date="2026-11-29"]');
  await expect(group).toHaveText('Groepsrit');
- await expect(page.locator('.l39-week-load-summary').first()).toContainText(/Workouts: \d+ TSS \+ 1 onbekend/);
+ await expect(page.locator('.l39-week-load-summary').first()).toContainText(/^Workouts: \d+ TSS$/);
  await expect(page.locator('.l39-week-card').first().locator('.l39-session-load').first()).toContainText('TSS');
  await page.locator('.l39-week-card').first().locator('button[data-date="2026-11-27"]').click();
  await expect(page.locator('#l39-workout-dialog')).toBeVisible();
@@ -55,7 +55,7 @@ test('proposal retains fixed group, shows partial TSS, and manual zero-day overr
  await expect(page.locator('.l39-capacity-warning').first()).toContainText('Handmatig boven beschikbaarheid');
  await page.locator('[data-tab=calendar]').click();
  await expect(page.locator('#l39-calendar-grid')).not.toBeEmpty();
- await expect(page.locator('.l39-week-summary-head')).toBeVisible();
+ if(await page.locator('#l39-mobile-calendar').isVisible()){await expect(page.locator('#l39-mobile-calendar')).toContainText('Geplande workouts');await page.locator('#l39-mobile-calendar button[data-date="2026-11-29"]').first().click();await expect(page.locator('.l39-mobile-details')).toContainText('Groepsrit');expect(await page.locator('.l39-calendar-panel').evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);}else await expect(page.locator('.l39-week-summary-head')).toBeVisible();
 });
 test('theme survives reload and cloud sync uses mock only',async({page})=>{
  await login(page);await plan(page);
@@ -83,4 +83,10 @@ test('a second automatic save during cloud upload is not lost',async({page})=>{
  await expect.poll(()=>page.evaluate(()=>window.__testCloudSnapshot?.plan?.discipline)).toBe('gravel');
  await page.locator('#l39-settings-link').click();
  await expect(page.locator('#l39-cloud-status')).toHaveText('Cloudopslag bevestigd.');
+});
+
+test('new browser storage restores cloud plan automatically at login',async({page})=>{
+ await login(page);await plan(page);await page.locator('#l39-settings-link').click();await page.locator('#l39-cloud-sync').click();await expect(page.locator('#l39-cloud-status')).toHaveText('Cloudopslag bevestigd.');
+ await page.locator('#logout-button').click();await page.evaluate(()=>localStorage.clear());await page.reload();await login(page);
+ await page.locator('[data-tab=plan]').click();await expect(page.locator('.l39-timeline-week')).toHaveCount(12);
 });

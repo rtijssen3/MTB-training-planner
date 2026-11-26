@@ -4,7 +4,9 @@ import {skillWorkout} from '../engine/friel.js';
 import {buildProgressiveWorkout} from './progression.js';
 export function workoutInfo(s,week){
  if(!s)return {load:null,workout:null,reason:'Geen training'};
- if(s.group)return {load:null,workout:null,reason:'Groepsrit: belasting afhankelijk van de uitvoering'};
+ if(s.group||s.type==='group'){
+  try{const workout=createStructuredWorkout({type:'endurance',durationMinutes:s.durationMinutes,ftp:300,phase:'Opbouw',protocol:'classic'});return {load:estimateWorkoutTss(workout).estimatedTss,workout,reason:null,estimatedGroup:true};}catch(e){return {load:null,workout:null,reason:e.message};}
+ }
  try{
    const phase=s.prescribedPhase|| (week?.phase==='Recovery'?'Herstel':'Opbouw');
    const builder=s.protocol==='progressive'?buildProgressiveWorkout:['force','skills','anaerobic','power'].includes(s.type)?skillWorkout:createStructuredWorkout;
