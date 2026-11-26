@@ -651,7 +651,7 @@ async function proposeWeek(){
       const estimates=new Map();
       const result=proposeSkillWeek({dates:weekDates(weekStart),availability:usable,target:groupOnly?0:remainingTarget,
         maxQuality:groupOnly?0:phasePolicy.maxQualitySessions,blocked:[...new Set([...phasePolicy.blockedQualityDates,...boundary])],
-        qualityTypes:disciplineQualityOrder(app.plan.discipline,week.phase,app.plan.limiter,seen,Math.max(0,week.week-1)),phase:week.phase,preferLong:aerobicFocus(app.plan.discipline,week.phase,app.plan.limiter),
+        qualityTypes:disciplineQualityOrder(app.plan.discipline,week.phase,app.plan.limiter,seen,app.plan.weeks.filter(w=>w.phase===week.phase&&w.start<week.start).length),phase:week.phase,preferLong:aerobicFocus(app.plan.discipline,week.phase,app.plan.limiter),
         fixed:groups,reserved,restDates,reservedLoadFor:s=>workoutInfo(s,week).load??NaN,groupLoadFor:durationMinutes=>workoutInfo({type:'endurance',group:true,durationMinutes},week).load??NaN,
         loadFor:(type,durationMinutes)=>{const k=type+':'+durationMinutes;if(!estimates.has(k))estimates.set(k,workoutInfo(candidateSession(type,durationMinutes,levelFor(type),week.phase),week).load??NaN);return estimates.get(k);}
       });

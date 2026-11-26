@@ -12,3 +12,11 @@ test('curve adapter excludes noncycling and estimated power; no raw data leaks',
 test('unexpected API schema rejects rather than returning fictitious scores',()=>assert.throws(()=>skillHistoryRecords([],{secs:[],list:[]},'2026-01-01','2026-11-26')));
 
 test('legacy plan without explicit discipline or limiter round-trips without mutation',()=>{const p={version:2,weeks:[{}]};assert.deepEqual(migrateDiscipline(p),p);});
+
+import {proposeSkillWeek} from '../src/engine/friel.js';
+import {workoutInfo} from '../src/workouts/workout-service.js';
+import {candidateSession} from '../src/workouts/progression.js';
+const dates=Array.from({length:7},(_,i)=>'2026-11-'+(23+i)),availability=Object.fromEntries(dates.map((d,i)=>[d,{available_minutes:[0,90,120,90,0,60,180][i]}])),loadFor=(type,durationMinutes)=>workoutInfo(candidateSession(type,durationMinutes,1,'Build'),{phase:'Build'}).load??NaN;
+function generate(d,i){return proposeSkillWeek({dates,availability,target:350,phase:'Build',maxQuality:2,fixed:[dates[6]],qualityTypes:disciplineQualityOrder(d,'Build','auto',[],i),preferLong:aerobicFocus(d,'Build','auto'),loadFor});}
+test('six actual Build proposals distinguish discipline with fixed Sunday ride and load guard',()=>{const all=Object.fromEntries(['xco','road','gravel'].map(d=>[d,Array.from({length:6},(_,i)=>generate(d,i))]));const hard=r=>r.sessions.filter(s=>!s.group&&['threshold','vo2max','power','anaerobic'].includes(s.type)).map(s=>s.type);const types=d=>all[d].flatMap(hard);assert.ok(types('xco').includes('anaerobic'));assert.ok(types('xco').includes('power'));assert.ok(types('road').includes('power'));assert.ok(types('gravel').filter(x=>x==='threshold').length>types('gravel').filter(x=>x==='vo2max').length);assert.ok(!types('gravel').includes('power'));for(const r of Object.values(all).flat()){assert.ok(r.estimatedKnownLoad<=350.01);assert.ok(r.sessions.some(s=>s.group&&s.date===dates[6]));assert.ok(r.sessions.filter(s=>!s.group&&s.type!=='endurance').length<=1);}});
+test('aerobic emphasis spends load on longest available endurance slot',()=>{const r=proposeSkillWeek({dates,availability,target:120,phase:'Build',maxQuality:0,preferLong:true,loadFor});assert.ok(r.sessions.some(s=>s.date===dates[6]&&s.durationMinutes>=150));assert.ok(r.estimatedKnownLoad<=120.01);});
