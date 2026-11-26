@@ -5,13 +5,15 @@ import {workoutText} from './src/workouts/export.js';
 import {createCloudSync} from './src/data/cloud-sync.js';
 import {readSnapshot} from './src/data/planner-snapshot.js';
 import {normalizePlannerAvailability,isGroupRide,fixedGroupDates,refreshFocus} from './src/core/planner-adapters.js';
-import {priorities,analyzeExposure,recalculateExposure,qualityOrder,proposeSkillWeek} from './src/engine/friel.js';
+import {proposeSkillWeek} from './src/engine/friel.js';
+import {disciplineTargets,disciplineQualityOrder,normalizeDiscipline,normalizeLimiter,aerobicFocus} from './src/engine/discipline-policy.js';
+import {buildSkillProfile,describeMetric} from './src/engine/skill-profile.js';
 import { raceWeekCount } from './src/engine/event-plan.js';
 // Les 39 – geïntegreerde gebruikersinterface voor bestaande Supabase- en workoutmodellen.
 // Trainingsplannen en workoutconcepten blijven lokaal; uitgevoerde activiteiten komen uit Intervals.icu.
 import { supabase } from './supabase-client.js';
 import { initializeAvailability } from './availability-service.js';
-import { fetchIntervalsActivities, fetchIntervalsWellness, testIntervalsConnection, exportIntervalsWorkout } from './intervals-api.js';
+import { fetchIntervalsActivities, fetchIntervalsWellness, testIntervalsConnection, exportIntervalsWorkout, fetchSkillHistory } from './intervals-api.js';
 import { normalizeActivity } from './intervals-model.js';
 import {workoutInfo} from './src/workouts/workout-service.js';
 import {progressionLevel,candidateSession,boundaryBlocks} from './src/workouts/progression.js';
@@ -40,7 +42,7 @@ const app={evaluationToken:0,dashboardRecords:[],feedbackRows:[],feedbackStatus:
 function status(id,message,kind='') {const el=$(id);if(!el)return;el.textContent=message;el.classList.toggle('is-error',kind==='error');el.classList.toggle('is-good',kind==='good');}
 function htmlNode(tag,cls,text){const el=document.createElement(tag);if(cls)el.className=cls;if(text!==undefined)el.textContent=String(text);return el;}
 function add(parent,tag,cls,text){const node=htmlNode(tag,cls,text);parent.appendChild(node);return node;}
-function cleanUser(){app.evaluationToken++;app.dashboardRecords=[];$('l39-completed-workouts').replaceChildren();app.weekModal=null;app.workoutModal=null;app.proposing=false;app.focusedWeek=null;app.feedbackRows=[];app.feedbackStatus='';app.feedbackBusy=false;app.cloud=null;app.cloudBusy=false;app.cloudQueued=false;app.startupIssue='';app.selectedCalendarDate=null;for(const id of ['l39-cloud-sync','l39-cloud-local','l39-cloud-remote'])$(id).disabled=false;app.userId=null;app.plan=null;app.planDirty=false;app.activityCache.clear();app.detailCache.clear();app.availability.clear();app.wellness=null;app.activityError=null;app.authGeneration++;$('l39-dashboard-body').hidden=true;$('l39-calendar-grid').replaceChildren();$('l39-mobile-calendar').replaceChildren();$('l39-two-weeks').replaceChildren();$('l39-timeline').replaceChildren();$('l39-feedback-list').replaceChildren();$('l39-skill-priorities').replaceChildren();$('l39-feedback-status').textContent='';for(const d of document.querySelectorAll('dialog[open]'))d.close();}
+function cleanUser(){app.evaluationToken++;$('l39-analyze-limiters').disabled=false;app.dashboardRecords=[];$('l39-completed-workouts').replaceChildren();app.weekModal=null;app.workoutModal=null;app.proposing=false;app.focusedWeek=null;app.feedbackRows=[];app.feedbackStatus='';app.feedbackBusy=false;app.cloud=null;app.cloudBusy=false;app.cloudQueued=false;app.startupIssue='';app.selectedCalendarDate=null;for(const id of ['l39-cloud-sync','l39-cloud-local','l39-cloud-remote'])$(id).disabled=false;app.userId=null;app.plan=null;app.planDirty=false;app.activityCache.clear();app.detailCache.clear();app.availability.clear();app.wellness=null;app.activityError=null;app.authGeneration++;$('l39-dashboard-body').hidden=true;$('l39-calendar-grid').replaceChildren();$('l39-mobile-calendar').replaceChildren();$('l39-two-weeks').replaceChildren();$('l39-timeline').replaceChildren();$('l39-feedback-list').replaceChildren();$('l39-skill-priorities').replaceChildren();$('l39-feedback-status').textContent='';for(const d of document.querySelectorAll('dialog[open]'))d.close();}
 const store=()=>createLocalPlannerStore(localStorage,app.userId,today);
 function localAvailability(){return store().localAvailability();}
 function setLocalAvailability(data){store().setLocalAvailability(data);}
@@ -356,40 +358,40 @@ function renderMobileCalendar(rows,activities,currentMonth,failed=false){
 function fillPlanForm(plan){
   if(!plan){$('l39-plan-form').reset();$('l39-plan-start').value=weekStartOf(today());$('l39-discipline').value='xco';$('l39-limiter').value='auto';return;}
   $('l39-plan-name').value=plan.name||'Mijn trainingsplan';$('l39-plan-start').value=plan.start;
-  $('l39-plan-race').value=plan.raceDate||'';$('l39-discipline').value=plan.discipline||'xco';$('l39-plan-weeks').value=plan.weeks.length;
+  $('l39-plan-race').value=plan.raceDate||'';$('l39-discipline').value=normalizeDiscipline(plan.discipline);$('l39-plan-weeks').value=plan.weeks.length;
   $('l39-plan-base').value=plan.baseLoad;$('l39-plan-growth').value=plan.progression;
   $('l39-plan-reduction').value=plan.recoveryReduction;$('l39-plan-recovery-every').value=plan.recoveryEvery;
-  $('l39-plan-plateau').value=plan.plateau;$('l39-limiter').value=plan.limiter||'auto';
+  $('l39-plan-plateau').value=plan.plateau;$('l39-limiter').value=normalizeLimiter(plan.limiter);
 }
 function renderSkillPanel(){
   const host=$('l39-skill-priorities');host.replaceChildren();
-  const {week}=effectivePlanWeek(app.plan,weekWindowStart(),weekStartOf(today()));
-  for(const p of priorities($('l39-discipline').value,week?.phase||app.plan?.weeks[0]?.phase||'Base',$('l39-limiter').value,app.plan?.limiterAnalysis)){
-    const row=add(host,'div','skill-row');add(row,'span','',p.label+(p.focus?' · focus':''));
-    const meter=add(row,'meter');meter.min=0;meter.max=5;meter.value=p.score;meter.setAttribute('aria-label',p.label);add(row,'strong','',p.score+'/5');
+  const profile=app.plan?.skillProfile?.version===1?app.plan.skillProfile:null;
+  const legend=add(host,'div','l39-skill-legend');add(legend,'span','goal','Doelprofiel');if(profile)add(legend,'span','current','Huidig profiel');
+  for(const p of disciplineTargets($('l39-discipline').value)){
+    const row=add(host,'div','l39-skill-pair');add(row,'strong','',p.label);
+    const bar=(value,kind,label)=>{const line=add(row,'div','l39-skill-bar-row '+kind);const meter=add(line,'meter');meter.min=0;meter.max=100;meter.value=value??0;meter.setAttribute('aria-label',label);if(value==null){meter.hidden=true;add(line,'span','l39-caption','Onvoldoende data');}add(line,'span','',value==null?'—':value+'%');};
+    bar(p.target,'goal',p.label+' doel');
+    if(profile){const m=profile.metrics?.[p.skill];bar(m?.score??null,'current',p.label+' huidig');add(row,'small','l39-caption',describeMetric(m));}
   }
-  const a=app.plan?.limiterAnalysis;
-  $('l39-limiter-status').textContent=a?('Vermogensgegevens: '+a.covered+'/'+a.denominator+' ritten. '+(a.candidate?'Mogelijke blootstellingslacune: '+a.candidate+'.':'Geen voldoende onderbouwde automatische focus.')+' Kracht en techniek niet afleidbaar uit zones.'):'Nog geen historieanalyse; kies desgewenst handmatig.';
+  $('l39-limiter-status').textContent=profile?'Analyse '+profile.asOf+' · '+profile.activityCount+' fietsactiviteiten · actuele 90 dagen t.o.v. persoonlijke 365 dagen. Scores zijn waargenomen prestaties, geen bewezen maximale capaciteit.':'Analyseer het huidige profiel; zonder gegevens tonen we geen actuele score.';
 }
 function updateSkillFocus(){
-  const next=refreshFocus(app.plan,{discipline:$('l39-discipline').value,limiter:$('l39-limiter').value},recalculateExposure);
+  const next=refreshFocus(app.plan,{discipline:normalizeDiscipline($('l39-discipline').value),limiter:normalizeLimiter($('l39-limiter').value)},()=>null);
   if(next!==app.plan){app.plan=next;app.planDirty=true;status('l39-plan-status','Trainingsfocus aangepast. Bewaar mesocycle om op te slaan; bestaande workouts blijven ongewijzigd.','good');}
   renderSkillPanel();
 }
 async function analyzeLimiterHistory(){
   if(!app.userId||!app.plan)return;
   const plan=app.plan,generation=app.authGeneration,button=$('l39-analyze-limiters');button.disabled=true;
-  $('l39-limiter-status').textContent='Trainingshistorie analyseren…';
+  $('l39-limiter-status').textContent='Prestatiegegevens ophalen…';
   try{
-    const start=dateKey(addDays(today(),-28)),end=nowKey();
-    const records=(await getActivitiesRange(start,end,{force:true})).filter(a=>['Ride','MountainBikeRide','GravelRide','VirtualRide'].includes(a.sport));
-    const detail=[];
-    for(const a of records.sort((a,b)=>b.date.localeCompare(a.date)).slice(0,24)){if(generation!==app.authGeneration)return;try{detail.push(await fetchActivityDetailForPlanning(a.id));}catch{}}
+    const end=nowKey(),start=dateKey(addDays(today(),-364));
+    const records=await fetchSkillHistory(start,end);
     if(generation!==app.authGeneration||plan!==app.plan)return;
-    plan.limiterAnalysis=analyzeExposure(buildPrivacySafeReport(detail,{start,end}).activities,plan.discipline,records.length);
-    app.planDirty=true;renderSkillPanel();status('l39-plan-status','Analyse toegevoegd. Bewaar mesocycle om op te slaan.','good');
+    plan.skillProfile=buildSkillProfile(records,end);delete plan.limiterAnalysis;
+    app.planDirty=true;renderSkillPanel();status('l39-plan-status','Vaardigheidsprofiel bijgewerkt. Bewaar mesocycle om op te slaan.','good');
   }catch(e){if(generation===app.authGeneration)$('l39-limiter-status').textContent='Analyse niet beschikbaar: '+e.message;}
-  finally{button.disabled=false;}
+  finally{if(generation===app.authGeneration)button.disabled=false;}
 }
 function renderTimeline(){
   const host=$('l39-timeline');host.replaceChildren();renderSkillPanel();renderFeedbackPanel();
@@ -649,7 +651,7 @@ async function proposeWeek(){
       const estimates=new Map();
       const result=proposeSkillWeek({dates:weekDates(weekStart),availability:usable,target:groupOnly?0:remainingTarget,
         maxQuality:groupOnly?0:phasePolicy.maxQualitySessions,blocked:[...new Set([...phasePolicy.blockedQualityDates,...boundary])],
-        qualityTypes:qualityOrder(app.plan.discipline,week.phase,app.plan.limiter,app.plan.limiterAnalysis,seen),phase:week.phase,
+        qualityTypes:disciplineQualityOrder(app.plan.discipline,week.phase,app.plan.limiter,seen,Math.max(0,week.week-1)),phase:week.phase,preferLong:aerobicFocus(app.plan.discipline,week.phase,app.plan.limiter),
         fixed:groups,reserved,restDates,reservedLoadFor:s=>workoutInfo(s,week).load??NaN,groupLoadFor:durationMinutes=>workoutInfo({type:'endurance',group:true,durationMinutes},week).load??NaN,
         loadFor:(type,durationMinutes)=>{const k=type+':'+durationMinutes;if(!estimates.has(k))estimates.set(k,workoutInfo(candidateSession(type,durationMinutes,levelFor(type),week.phase),week).load??NaN);return estimates.get(k);}
       });
@@ -703,7 +705,7 @@ function generatePlan(event){
     if(data.raceDate)data.weeks=raceWeekCount(data.start,data.raceDate);
     if(Number(data.weeks)<8||Number(data.weeks)>24)throw Error('Kies 8–24 weken.');
     $('l39-plan-weeks').value=String(data.weeks);
-    const previous=app.plan;app.plan=createMesocycle(data);app.plan.limiter=$('l39-limiter').value;if(previous?.limiterAnalysis)app.plan.limiterAnalysis=recalculateExposure(previous.limiterAnalysis,data.discipline);app.planDirty=true;app.focusedWeek=null;renderTimeline();renderTwoWeeks();
+    const previous=app.plan;app.plan=createMesocycle(data);app.plan.limiter=$('l39-limiter').value;if(previous?.skillProfile?.version===1)app.plan.skillProfile=previous.skillProfile;app.planDirty=true;app.focusedWeek=null;renderTimeline();renderTwoWeeks();
     status('l39-plan-status','Concept gegenereerd maar nog niet opgeslagen. Klik op Bewaar mesocycle.','good');
   }catch(e){status('l39-plan-status',e.message,'error')}
 }

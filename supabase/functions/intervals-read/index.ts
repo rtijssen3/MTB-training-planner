@@ -1,3 +1,4 @@
+import {skillHistoryRecords} from './skill-history.js';
 import { withSupabase } from 'npm:@supabase/server@1';
 
 type ActionRequest = {
@@ -207,6 +208,19 @@ export default {
         if(created?.id==null)return errorResponse('Export niet bevestigd. Controleer de kalender.',502);
         return Response.json({exported:true,id:created.id});
       }catch{return errorResponse('Export niet bevestigd. Controleer Intervals.icu voordat je opnieuw probeert.',502);}
+    }
+    if(body.action==='skill-history'){
+      if(!validDate(body.oldest)||!validDate(body.newest))return errorResponse('Ongeldige referentieperiode.',400);
+      const days=(Date.parse(body.newest)-Date.parse(body.oldest))/86400000;
+      if(days<0||days>364)return errorResponse('Maximaal 365 kalenderdagen.',400);
+      const params=new URLSearchParams({oldest:body.oldest,newest:body.newest});
+      const curveParams=new URLSearchParams({oldest:body.oldest+'T00:00:00',newest:body.newest+'T23:59:59',secs:'5,15,30,60,300,1200'});
+      try{
+        const [activities,curves]=await Promise.all([intervalsGet('/athlete/0/activities?'+params,apiKey),intervalsGet('/athlete/0/activity-power-curves.json?'+curveParams,apiKey)]);
+        if(!activities.ok||!curves.ok)return errorResponse('Vaardigheidsgegevens konden niet volledig worden opgehaald.',502);
+        const records=skillHistoryRecords(await activities.json(),await curves.json(),body.oldest,body.newest);
+        return Response.json({provider:'intervals.icu',oldest:body.oldest,newest:body.newest,records});
+      }catch(e){return errorResponse('Vaardigheidsgegevens niet beschikbaar of API-formaat afwijkend.',502);}
     }
     const allowedActions = [
       'test-connection',

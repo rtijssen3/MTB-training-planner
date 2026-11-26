@@ -113,3 +113,13 @@ test('multiple rides do not falsely map to planned intervals',async({page})=>{
  await page.evaluate(()=>window.__testActivities=[{id:'a',start_date_local:'2026-11-25T08:00:00',name:'Ride A',type:'Ride',moving_time:3600,icu_training_load:40},{id:'b',start_date_local:'2026-11-25T10:00:00',name:'Ride B',type:'Ride',moving_time:3600,icu_training_load:40}]);await page.locator('[data-tab=dashboard]').click();
  await expect(page.locator('.l39-completed-card')).toHaveCount(2);await page.locator('.l39-completed-card').first().getByRole('button',{name:'Evalueer workout'}).click();await expect(page.locator('.l39-completed-card').first()).toContainText('Geen niveauadvies mogelijk');await expect(page.locator('.l39-completed-card').first().getByRole('button',{name:'Evaluatie bewaren'})).toHaveCount(0);
 });
+
+test('five skills, paired bars, performance profile and legacy discipline migration',async({page})=>{
+ await login(page);await plan(page);
+ await expect(page.locator('#l39-discipline option')).toHaveCount(3);
+ await expect(page.locator('#l39-skill-priorities .goal meter')).toHaveCount(5);
+ await page.evaluate(()=>{window.__testSkillRecords=[{date:'2026-11-20',watts:{5:900,15:750,30:550,60:450,300:320,1200:270},weight:75,duration:8000,powerMeter:true,hr:130,ftp:280,avgPower:180,np:184,decoupling:4},{date:'2026-11-10',duration:8000,powerMeter:true,hr:130,ftp:280,avgPower:180,np:183,decoupling:5},{date:'2026-06-01',watts:{5:1000,15:800,30:600,60:500,300:340,1200:290},weight:75}];});
+ await page.locator('#l39-analyze-limiters').click();await expect(page.locator('#l39-skill-priorities .current meter')).toHaveCount(5);await expect(page.locator('#l39-skill-priorities')).toContainText('decoupling');
+ await page.locator('#l39-plan-save').click();await page.reload();await expect(page.locator('#l39-skill-priorities .current meter')).toHaveCount(5);
+ await page.evaluate(()=>{const k='mtb-mesocycle:v2:synthetic-test-user',p=JSON.parse(localStorage.getItem(k));p.discipline='xcm';p.limiter='force';localStorage.setItem(k,JSON.stringify(p));});await page.reload();await expect(page.locator('#l39-discipline')).toHaveValue('gravel');await expect(page.locator('#l39-limiter')).toHaveValue('auto');
+});

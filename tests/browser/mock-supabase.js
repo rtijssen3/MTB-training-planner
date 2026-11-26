@@ -30,6 +30,7 @@ export const supabase={
  functions:{invoke:async(name,{body})=>{
   if(body.action==='list-activities')return ok({provider:'intervals.icu',oldest:body.oldest,newest:body.newest,activities:(window.__testActivities||JSON.parse(sessionStorage.getItem('fake-activities')||'[]')).filter(a=>a.start_date_local.slice(0,10)>=body.oldest&&a.start_date_local.slice(0,10)<=body.newest)});
   if(body.action==='get-activity-details')return ok({activity:(window.__testDetails||{})[body.activityId]||{id:body.activityId}});
+  if(body.action==='skill-history')return ok({provider:'intervals.icu',oldest:body.oldest,newest:body.newest,records:window.__testSkillRecords||[]});
   if(body.action==='list-wellness')return ok({provider:'intervals.icu',oldest:body.oldest,newest:body.newest,wellness:[{date:'2026-11-25',ctl:50,atl:60}]});
   if(body.action==='test-connection')return ok({provider:'intervals.icu',connected:true});
   return {data:null,error:{message:'Unexpected test action '+body.action}};

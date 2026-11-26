@@ -1,3 +1,4 @@
+import {migrateDiscipline} from '../engine/discipline-policy.js';
 import {addDays,dateKey,monday,migrateLegacyPlan,parseDate,weekStartOf,weekDates,validSession} from '../../planner-model.js';
 // Keep historical browser keys unchanged so existing plans survive the release.
 export function createLocalPlannerStore(storage,user,clock=()=>new Date()){
@@ -8,9 +9,9 @@ export function createLocalPlannerStore(storage,user,clock=()=>new Date()){
  function read(key,fallback){try{return JSON.parse(storage.getItem(key)??'null')??fallback;}catch{return fallback;}}
  function readPlan(){
   const plan=read(planKey,null);
-  if(plan?.version===2&&Array.isArray(plan.weeks)&&plan.weeks.length)return plan;
+  if(plan?.version===2&&Array.isArray(plan.weeks)&&plan.weeks.length)return migrateDiscipline(plan);
   const next=dateKey(addDays(monday(clock()),7));
-  try{return migrateLegacyPlan(read('mtb-periodization-draft:v1:'+user+':'+next,null));}catch{return null;}
+  try{return migrateDiscipline(migrateLegacyPlan(read('mtb-periodization-draft:v1:'+user+':'+next,null)));}catch{return null;}
  }
  function manualRestDates(start){const dates=weekDates(start),raw=read(workoutKey(start),null);return Array.isArray(raw?.manualRestDates)?[...new Set(raw.manualRestDates.filter(d=>dates.includes(d)))]:[];}
  function sessions(start){
