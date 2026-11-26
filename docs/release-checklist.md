@@ -5,3 +5,6 @@
 - [ ] Final version commit validation and Pages deployment. Verify the public site and v1.0.0 tag after deploy.
 - Manual testing is user-reported, not independently performed against the real account by CI.
 - Existing Supabase migrations and edge function configuration are not modified by this release.
+
+## v1.1.0 acceptance (2026-11-26)
+All seven practical checks confirmed by user. See [v1.1 plan](v1.1-plan.md) and [automated validation](https://github.com/rtijssen3/MTB-training-planner/actions/runs/45891871016). Supabase function version 14 deployed and live data analysis accepted. Deployment status: verify Pages workflow for release commit.
