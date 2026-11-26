@@ -42,7 +42,7 @@ test('proposal retains fixed group, includes estimated TSS, and manual zero-day 
  await expect(page.locator('#l39-plan-status')).toContainText('trainingen voorgesteld');
  const group=page.locator('.l39-week-card').first().locator('button[data-date="2026-11-29"]');
  await expect(group).toHaveText('Groepsrit');
- await expect(page.locator('.l39-week-load-summary').first()).toContainText(/^Workouts: \d+ TSS$/);
+ await expect(page.locator('.l39-week-load-summary strong').first()).toHaveText(/^Workouts: \d+ TSS$/);
  await expect(page.locator('.l39-week-card').first().locator('.l39-session-load').first()).toContainText('TSS');
  await page.locator('.l39-week-card').first().locator('button[data-date="2026-11-27"]').click();
  await expect(page.locator('#l39-workout-dialog')).toBeVisible();
@@ -53,6 +53,10 @@ test('proposal retains fixed group, includes estimated TSS, and manual zero-day 
  await expect(page.locator('#l39-workout-dialog')).not.toBeVisible();
  await expect(page.locator('.l39-week-card').first().locator('button[data-date="2026-11-27"]')).toHaveText('Duur Z2');
  await expect(page.locator('.l39-capacity-warning').first()).toContainText('Handmatig boven beschikbaarheid');
+ await page.locator('#l39-propose').click();await expect(page.locator('#l39-plan-status')).toContainText('handmatig aangepaste dag(en) behouden');
+ await expect(page.locator('.l39-week-card').first().locator('button[data-date="2026-11-27"]')).toHaveText('Duur Z2');
+ await page.reload();await expect(page.locator('.l39-week-card')).toHaveCount(2);
+ await page.locator('.l39-week-card').first().locator('button[data-date="2026-11-27"]').click();await expect(page.locator('#l39-workout-duration')).toHaveValue('60');await page.locator('#l39-workout-dialog [data-action=close-dialog]').first().click();
  await page.locator('[data-tab=calendar]').click();
  await expect(page.locator('#l39-calendar-grid')).not.toBeEmpty();
  if(await page.locator('#l39-mobile-calendar').isVisible()){await expect(page.locator('#l39-mobile-calendar')).toContainText('Geplande workouts');await page.locator('#l39-mobile-calendar button[data-date="2026-11-29"]').first().click();await expect(page.locator('.l39-mobile-details')).toContainText('Groepsrit');expect(await page.locator('.l39-calendar-panel').evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);}else await expect(page.locator('.l39-week-summary-head')).toBeVisible();
