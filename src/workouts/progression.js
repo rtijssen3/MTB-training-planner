@@ -1,3 +1,4 @@
+import {getTemplate} from './library.js';
 // Versioned workload recipes. Levels raise repetition volume, not FTP targets.
 const SPECS={"threshold":[[2,480,100,180,50],[3,480,100,180,50],[3,600,100,180,50]],"vo2max":[[4,180,115,180,50],[5,180,115,180,50],[6,180,115,180,50]],"force":[[3,180,75,180,55],[4,180,75,180,55],[5,180,75,180,55]],"skills":[[4,20,70,160,60],[6,20,70,160,60],[8,20,70,160,60]],"anaerobic":[[4,45,140,180,50],[5,45,140,180,50],[6,45,140,180,50]],"power":[[3,10,180,240,50],[4,10,180,240,50],[5,10,180,240,50]]};
 const TITLES={"threshold":"Threshold","vo2max":"VO₂max","force":"Krachtgericht (60–70 rpm, zittend)","skills":"Souplesse (hoge cadans)","anaerobic":"Anaerobe intervallen","power":"Korte krachtige versnellingen"};
@@ -24,7 +25,7 @@ export function buildProgressiveWorkout({type,durationMinutes,ftp=300,level,phas
  return {type,title:TITLES[type],durationMinutes,ftp,phase,protocol:'progressive',level,steps,hardMinutes:steps.filter(s=>s.kind==='work').reduce((sum,s)=>sum+s.seconds,0)/60};
 }
 
-export function isQuality(session){return !!session&&(session.group||['threshold','vo2max','force','anaerobic','power'].includes(session.type));}
+export function isQuality(session){return !!session&&(session.group||(session.protocol==='library'?!!getTemplate(session.templateId)?.quality:['threshold','vo2max','force','anaerobic','power'].includes(session.type)));}
 
 export function boundaryBlocks({dates,previous=[],next=[]}){
  const blocked=[];
