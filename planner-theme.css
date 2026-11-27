@@ -116,3 +116,16 @@ html{background:var(--bg)}body.l39-body{margin:0!important;background:var(--bg)!
 #l39-workout-template{min-width:0;width:100%}.l39-workout-step strong{max-width:50%;text-align:right}.l39-workout-step span{overflow-wrap:anywhere}
 
 .l39-forecast-panel{margin-top:16px}.l39-forecast-legend{display:flex;flex-wrap:wrap;gap:8px 16px;margin:10px 0;color:var(--muted);font-size:12px}.l39-forecast-legend span{display:inline-flex;align-items:center;gap:6px}.l39-forecast-legend i{display:inline-block;width:20px;height:3px;border-radius:2px}.l39-forecast-panel svg{display:block;width:100%;height:auto;max-height:340px;overflow:visible}
+
+/* v1.2 compact workout and separated strategy editor */
+.l39-workout-fields [hidden],.l39-plan-top-actions [hidden],#l39-plan-draft-actions[hidden],.l39-plan-help [hidden]{display:none!important}
+.l39-workout-metrics{display:flex;flex-wrap:wrap;align-items:baseline;column-gap:7px;row-gap:3px;font-size:12px;color:var(--muted);line-height:1.4}
+.l39-workout-metrics strong{display:inline;font-size:13px;margin:0;color:var(--text);font-weight:700}
+.l39-workout-fields{gap:10px}.l39-workout-fields label{gap:4px}.l39-workout-preview h3{margin-bottom:8px}
+.l39-new-plan{width:100%;margin:0 0 12px}.l39-plan-top-actions{display:flex;flex-direction:column;align-items:flex-end;gap:5px;flex:0 0 auto}.l39-plan-top-actions button{padding:7px 10px;font-size:12px}
+#l39-plan-draft-actions{margin-top:10px}.l39-feedback-details>summary{font-size:15px;font-weight:700;cursor:pointer}.l39-feedback-details[open]>summary{margin-bottom:12px}
+#l39-plan-dialog .l39-panel{margin:0 0 12px;padding:12px;background:transparent;border-color:var(--line);box-shadow:none}
+#l39-plan-dialog .l39-form-grid{grid-template-columns:repeat(2,minmax(0,1fr));align-items:start}#l39-plan-dialog .l39-form-grid>label:first-child{grid-column:1/-1}
+#l39-plan-dialog .l39-form-grid input{min-width:0;box-sizing:border-box}
+.l39-plan-help{display:flex;flex-direction:column;gap:6px;min-width:0}.l39-help-label{display:flex;align-items:center;gap:4px;min-height:20px}.l39-body .l39-info{display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--accent);background:transparent;color:var(--accent);border-radius:50%;width:20px;height:20px;padding:0;font-size:12px;font-weight:700;flex:0 0 20px}.l39-help-text{font-size:11px;line-height:1.45;padding:8px;background:var(--surface2);border-radius:6px;color:var(--text);margin:0}
+@media(max-width:780px){#l39-workout-dialog{padding:14px;max-height:94dvh}#l39-workout-dialog .l39-dialog-header{margin-bottom:8px;padding-bottom:8px}#l39-workout-dialog .l39-workout-editor{gap:9px}#l39-workout-dialog .l39-workout-fields{gap:8px}#l39-workout-dialog .l39-workout-fields select,#l39-workout-dialog .l39-workout-fields input{padding-top:7px;padding-bottom:7px;min-height:36px}#l39-workout-dialog .l39-workout-chart{height:112px}#l39-workout-dialog .l39-workout-steps{max-height:none;overflow:visible}#l39-workout-dialog .l39-workout-capacity{margin:0}#l39-workout-dialog .l39-workout-metrics{font-size:11px;gap:5px}}
