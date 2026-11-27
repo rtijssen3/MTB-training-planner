@@ -1,7 +1,6 @@
-// Friel-inspired scheduling heuristics; percentages are personal maintenance goals,
-// not published physiological standards or Friel's prescribed percentages.
+// Friel-inspired discipline priorities (1–5); not validated capacity standards.
 export const ABILITIES=[['aerobic','Duurvermogen'],['muscular','Drempelvermogen'],['vo2max','VO₂max'],['anaerobic','Anaeroob vermogen'],['power','Explosiviteit']];
-const GOALS={xco:[100,95,100,100,95],road:[100,100,95,85,95],gravel:[100,100,90,80,75]};
+const GOALS={xco:[4,4,5,5,4],road:[4,5,4,3,5],gravel:[5,5,3,2,2]};
 export function normalizeDiscipline(d){return d==='xcm'?'gravel':Object.hasOwn(GOALS,d)?d:'xco';}
 export function normalizeLimiter(l){return ['auto','none',...ABILITIES.map(a=>a[0])].includes(l)?l:'auto';}
 export function disciplineTargets(d){return ABILITIES.map(([skill,label],i)=>({skill,label,target:GOALS[normalizeDiscipline(d)][i]}));}

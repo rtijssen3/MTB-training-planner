@@ -1,3 +1,4 @@
+import {getTemplate} from '../workouts/library.js';
 // Workout feedback: detected intervals are evidence of exposure, not a recovery test.
 export const TYPES=["threshold","vo2max","force","skills","anaerobic","power"];
 export const RATINGS=["easy","good","hard","neutral"];
@@ -8,10 +9,12 @@ const POWER_TYPES=["threshold","vo2max","anaerobic","power"];
 const iso=s=>typeof s==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(s);
 
 export function evaluateExecution(session,workout,rides,detail){
- const result={date:session.date,type:session.type,level:session.protocol==='progressive'&&[1,2,3].includes(session.level)?session.level:null,rating:null,completed:false,matched:0,required:0,evidence:'unknown',reason:''};
+ const template=getTemplate(session.templateId);
+ const result={date:session.date,type:session.type,...(template?{templateId:template.id}:{}),level:(session.protocol==='progressive'||session.protocol==='library'&&!template?.test)&&[1,2,3].includes(session.level)?session.level:null,rating:null,completed:false,matched:0,required:0,evidence:'unknown',reason:''};
  if(!rides.length){result.reason='Geen fietsactiviteit gevonden op deze datum.';return result;}
  if(rides.length!==1){result.reason='Meerdere fietsactiviteiten; koppeling niet eenduidig.';return result;}
  result.completed=true;result.activityId=String(rides[0].id);result.rating=RATINGS.includes(session.feedback)&&(!session.feedbackActivityId||String(session.feedbackActivityId)===result.activityId)?session.feedback:null;
+ if(template?.test){result.reason='Prestatietest: analyseer het vaardigheidsprofiel opnieuw voor de gemeten prestatie. Geen automatisch niveau- of FTP-advies.';return result;}
  if(!POWER_TYPES.includes(session.type)){result.reason='Cadans/techniek niet aantoonbaar uit deze gegevens; eigen beoordeling nodig.';return result;}
  if(!workout?.steps?.length){result.reason='Voorgeschreven profiel niet beschikbaar.';return result;}
  const work=workout.steps.filter(s=>s.kind==='work');
@@ -33,9 +36,9 @@ export function evaluateExecution(session,workout,rides,detail){
  return result;
 }
 
-export function recommendLevel(type,planned,rows,today){
+export function recommendLevel(type,planned,rows,today,templateId=null){
  if(!TYPES.includes(type)||![1,2,3].includes(planned)||!iso(today))throw Error('Ongeldige niveauvraag.');
- const recent=rows.filter(r=>r.type===type&&iso(r.date)&&(r.date<today||r.date===today&&r.completed===true&&r.rating)&&r.completed!==false&&[1,2,3].includes(r.level)).sort((a,b)=>b.date.localeCompare(a.date));
+ const recent=rows.filter(r=>r.type===type&&(r.templateId??null)===templateId&&iso(r.date)&&(r.date<today||r.date===today&&r.completed===true&&r.rating)&&r.completed!==false&&[1,2,3].includes(r.level)).sort((a,b)=>b.date.localeCompare(a.date));
  const latest=recent[0];
  if(!latest)return {level:1,decision:'start',reason:'Geen recent beoordeeld niveau; begin op N1.'};
  const age=(Date.parse(today+'T00:00:00Z')-Date.parse(latest.date+'T00:00:00Z'))/86400000;
