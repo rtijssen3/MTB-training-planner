@@ -666,22 +666,23 @@ async function proposeWeek(){
         fixed:groups,reserved,restDates,reservedLoadFor:s=>workoutInfo(s,week).load??NaN,groupLoadFor:durationMinutes=>workoutInfo({type:'endurance',group:true,durationMinutes},week).load??NaN,
         loadFor:(type,durationMinutes)=>{const k=type+':'+durationMinutes;if(!estimates.has(k))estimates.set(k,workoutInfo(candidateSession(type,durationMinutes,levelFor(type),week.phase),week).load??NaN);return estimates.get(k);}
       });
-      if(result.unknownFixed)warnings.push('Een vaste of handmatige workout heeft geen geldige TSS-schatting; geen aanvullende trainingen voorgesteld.');
+      const budget=groupOnly?0:remainingTarget,shortfall=Math.max(0,budget-result.estimatedKnownLoad);
+      const freeDates=weekDates(weekStart).filter(d=>!result.sessions.some(s=>s.date===d)&&usable[d]?.available_minutes>=15);
+      if(result.unknownFixed)warnings.push(`Week ${weekNumber(weekStart)}: een vaste of handmatige workout heeft geen geldige TSS-schatting; geen aanvullende trainingen voorgesteld.`);
+      if(!result.unknownFixed&&shortfall>=1)warnings.push(`Week ${weekNumber(weekStart)}: voorstel ${num(result.estimatedKnownLoad)} / ${num(budget)} TSS (nog ${num(shortfall)} binnen het voorstelbudget). ${freeDates.length?'Geen extra passende sessie binnen beschikbaarheid, resterend TSS-budget en herstelregels.':'Geen extra beschikbare dagen.'}`);
+      if(!result.unknownFixed&&budget<week.targetLoad-completedLoad&&weekStart!==currentWeek)warnings.push(`Week ${weekNumber(weekStart)}: effectief automatisch voorstelbudget ${num(budget)} TSS; mesocycledoel ${num(week.targetLoad)} TSS.`);
       if(result.estimatedKnownLoad>(groupOnly?0:remainingTarget)+.01)warnings.push(`Week ${weekNumber(weekStart)}: vaste/handmatige workouts overschrijden het resterende automatische TSS-budget; ze blijven behouden.`);
       if(groups.length)warnings.push('Groepsrit meegerekend als Z2-schatting; herstel conservatief behandeld.');
       const suggestions=result.sessions
         .filter(s=>s.date>=now && !occupiedDates.includes(s.date))
          .map(s=>s.manual===true||s.protocol==='library'?s:({date:s.date,...candidateSession(s.type,s.durationMinutes,levelFor(s.type),week.phase),group:!!s.group}));
-      if(!suggestions.length&&!groupOnly&&!reservedDates.size){
-        warnings.push(`Week ${weekNumber(weekStart)}: geen passende trainingen mogelijk.`);
-        continue;
-      }
+      if(!suggestions.length&&!groupOnly&&!reservedDates.size)warnings.push(`Week ${weekNumber(weekStart)}: geen passende trainingen mogelijk; oude automatische toekomstige workouts worden bij bevestiging verwijderd.`);
       const preservedToday=existing.filter(s=>s.date===now && occupiedDates.includes(s.date));
       prepared.push({start:weekStart,suggestions,existing,
         // Behoud reeds uitgevoerde dagen, inclusief vandaag.
         merged:[...mergeFutureSessions(existing,suggestions,now),...preservedToday]
           .sort((a,b)=>a.date.localeCompare(b.date)),
-        completedLoad,remainingTarget,levels});
+        completedLoad,remainingTarget,budget,estimatedLoad:result.estimatedKnownLoad,originalTarget:week.targetLoad,levels});
     }
     if(!prepared.length){
       status('l39-plan-status',warnings.join(' ')||'Geen resterende trainingsmomenten beschikbaar.','error');
@@ -689,14 +690,14 @@ async function proposeWeek(){
     }
     if(generation!==app.authGeneration||activePlan!==app.plan)return;
     const replacing=prepared.filter(item=>item.existing.some(s=>s.date>=now&&s.manual!==true));
-    const preview=prepared.map(item=>`Week ${weekNumber(item.start)}:\n`+(item.suggestions.length?item.suggestions.map(s=>`${s.date}: ${sessionTitle(s)} · ${s.durationMinutes} min${s.level?' · niveau '+s.level+' ('+(s.manual?'handmatig behouden':item.levels[s.type]?.reason||'standaard')+')':''}`).join('\n'):'Geen aanvullende trainingen')).join('\n\n');
+    const preview=prepared.map(item=>`Week ${weekNumber(item.start)}: mesocycledoel ${num(item.originalTarget)} TSS · automatisch restbudget ${num(item.budget)} TSS · voorstel ${num(item.estimatedLoad)} TSS\n`+(item.suggestions.length?item.suggestions.map(s=>`${s.date}: ${sessionTitle(s)} · ${s.durationMinutes} min${s.level?' · niveau '+s.level+' ('+(s.manual?'handmatig behouden':item.levels[s.type]?.reason||'standaard')+')':''}`).join('\n'):'Geen aanvullende trainingen')).join('\n\n');
     if(!window.confirm(`${preview}\n\n${replacing.length?'Bestaande automatische toekomstige trainingen worden vervangen. Handmatige wijzigingen blijven behouden. ':''}Voorstel bevestigen?`))return;
     if(generation!==app.authGeneration||activePlan!==app.plan)return;
     for(const item of prepared)storeSessions(item.start,item.merged);
     syncPlanner({automatic:true});
     const count=prepared.reduce((sum,item)=>sum+item.suggestions.length,0);
     const current=prepared.find(item=>item.start===currentWeek);
-    const detail=current?` Huidige week: ${current.completedLoad} load uitgevoerd, ${current.remainingTarget} load resterend vóór het voorstel.`:'';
+    const detail=prepared.map(item=>` Week ${weekNumber(item.start)}: ${num(item.estimatedLoad)} TSS voorgesteld, ${num(item.budget)} TSS automatisch restbudget, ${num(item.originalTarget)} TSS mesocycledoel${item.completedLoad?' ('+num(item.completedLoad)+' load uitgevoerd)':''}.`).join('');
     status('l39-plan-status',`${count} trainingen voorgesteld voor ${prepared.length} week/weken.${detail} ${warnings.join(' ')} TSS-voorstellen blijven schattingen.`,'good');
     await renderTwoWeeks();
   }catch(e){
