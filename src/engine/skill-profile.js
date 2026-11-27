@@ -34,3 +34,6 @@ export function describeMetric(m){
  if(m.points)return m.points.map(p=>p.seconds===1200?'20 min':p.seconds===300?'5 min':p.seconds+' s').map((label,i)=>label+': '+m.points[i].value+' '+m.points[i].unit+' (referentie '+m.points[i].reference+')').join(' · ');
  return m.value+'% decoupling · '+m.count+' ritten';
 }
+
+// Observed achievement relative to personal reference. Unknown stays unknown.
+export function skillLevel(score){if(score==null||!Number.isFinite(score)||score<0||score>100)return null;return score>=95?5:score>=85?4:score>=75?3:score>=65?2:1;}
