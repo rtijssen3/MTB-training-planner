@@ -114,3 +114,5 @@ html{background:var(--bg)}body.l39-body{margin:0!important;background:var(--bg)!
 @media(max-width:780px){.l39-month-controls{flex-wrap:wrap;gap:8px}.l39-month-nav{flex:1 0 100%;width:100%}.l39-month-nav strong{min-width:0;text-align:center}.l39-month-controls>#l39-month-today{margin-left:auto}}
 
 #l39-workout-template{min-width:0;width:100%}.l39-workout-step strong{max-width:50%;text-align:right}.l39-workout-step span{overflow-wrap:anywhere}
+
+.l39-forecast-panel{margin-top:16px}.l39-forecast-legend{display:flex;flex-wrap:wrap;gap:8px 16px;margin:10px 0;color:var(--muted);font-size:12px}.l39-forecast-legend span{display:inline-flex;align-items:center;gap:6px}.l39-forecast-legend i{display:inline-block;width:20px;height:3px;border-radius:2px}.l39-forecast-panel svg{display:block;width:100%;height:auto;max-height:340px;overflow:visible}

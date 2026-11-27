@@ -38,14 +38,15 @@ export function skillWorkout({type,durationMinutes,ftp,phase='Opbouw'}){
  return {type,title:LABELS[SKILLS.indexOf(MAP[type])],durationMinutes,ftp,phase,protocol:'classic',steps,hardMinutes:steps.filter(s=>s.kind==='work'&&s.percentFtp>100).reduce((s,x)=>s+x.seconds,0)/60};
 }
 
-export function proposeSkillWeek({dates,availability,target,maxQuality=2,blocked=[],qualityTypes=[],phase='Build',loadFor,fixed=[],groupLoadFor=minutes=>loadFor('endurance',minutes),reserved=[],reservedLoadFor=s=>s.group?groupLoadFor(s.durationMinutes):loadFor(s.type,s.durationMinutes),restDates=[],preferLong=false,sessionCandidates=null,sessionLoad=null}){
+export function proposeSkillWeek({dates,availability,target,maxQuality=2,blocked=[],qualityTypes=[],phase='Build',loadFor,fixed=[],groupLoadFor=minutes=>loadFor('endurance',minutes),reserved=[],reservedLoadFor=s=>s.group?groupLoadFor(s.durationMinutes):loadFor(s.type,s.durationMinutes),restDates=[],preferLong=false,sessionCandidates=null,sessionLoad=null,allowCandidate=null}){
  if(dates.length!==7||!Number.isFinite(target)||target<0||!Number.isInteger(maxQuality)||maxQuality<0||maxQuality>2)throw Error('Ongeldige planningsparameters');
  const slots=new Map(),busy=new Set(blocked),hard=[],locked=new Set(),rest=new Set(restDates);let used=0,unknownFixed=0,reservedQuality=0;
  const cap=d=>rest.has(d)?0:Math.min(360,Math.floor((availability[d]?.available_minutes||0)/15)*15);
  // Manual sessions are immutable reservations, including those beyond standard availability.
  for(const s of reserved){const i=dates.indexOf(s.date);if(i<0||locked.has(i)||rest.has(s.date))continue;slots.set(i,{...s});locked.add(i);const load=reservedLoadFor(s);if(Number.isFinite(load)&&load>=0)used+=load;else unknownFixed++;if(isQuality(s)){reservedQuality++;for(const j of [i-1,i,i+1])if(dates[j])busy.add(dates[j]);}}
  const loadSession=s=>sessionLoad?sessionLoad(s):loadFor(s.type,s.durationMinutes);
- const put=(i,type,minutes)=>{const date=dates[i],candidates=sessionCandidates?sessionCandidates(type,minutes,date):[{type,durationMinutes:minutes,protocol:'classic'}];for(const candidate of candidates){const s={...candidate,date},load=loadSession(s);if(!Number.isFinite(load)||load<0||used+load>target+.01)continue;slots.set(i,s);used+=load;return true;}return false;};
+ const allowed=s=>!allowCandidate||allowCandidate(s,[...slots.values()]);
+ const put=(i,type,minutes)=>{const date=dates[i],candidates=sessionCandidates?sessionCandidates(type,minutes,date):[{type,durationMinutes:minutes,protocol:'classic'}];for(const candidate of candidates){const s={...candidate,date},load=loadSession(s);if(!Number.isFinite(load)||load<0||used+load>target+.01||!allowed(s))continue;slots.set(i,s);used+=load;return true;}return false;};
  for(const date of new Set(fixed)){const i=dates.indexOf(date);if(i<0||slots.has(i)||cap(date)<15)continue;slots.set(i,{date,type:'endurance',group:true,durationMinutes:cap(date),protocol:'classic'});const load=groupLoadFor(cap(date));if(Number.isFinite(load)&&load>=0)used+=load;else unknownFixed++;for(const j of [i-1,i,i+1])if(dates[j])busy.add(dates[j]);}
  const groups=[...slots.entries()].filter(([i,s])=>s.group&&!locked.has(i)).length,limit=phase==='Recovery'||unknownFixed?0:Math.max(0,maxQuality-groups-reservedQuality);
  const qualityOrder=preferLong?[1,3,2,5,0,4,6].sort((a,b)=>cap(dates[a])-cap(dates[b])):[1,3,2,5,0,4,6];
@@ -56,7 +57,7 @@ export function proposeSkillWeek({dates,availability,target,maxQuality=2,blocked
   let placed=false;if(preferLong&&type==='endurance'){for(let minutes=cap(dates[i]);minutes>=45;minutes-=15){if(put(i,type,minutes)){placed=true;break;}}}if(!placed&&sessionCandidates&&cap(dates[i])>=60)placed=put(i,type,60);if(!placed)placed=put(i,type,45);
   if(!placed&&sessionCandidates&&type==='skills'){if(cap(dates[i])>=60)placed=put(i,'endurance',60);if(!placed)put(i,'endurance',45);}
  }
- for(let pass=0;pass<150;pass++){let changed=false;for(const i of enduranceOrder){const s=slots.get(i);if(!s||locked.has(i)||s.group||s.type!=='endurance'||s.durationMinutes+15>cap(s.date))continue;const next=s.durationMinutes+15,delta=loadSession({...s,durationMinutes:next})-loadSession(s);if(Number.isFinite(delta)&&delta>=0&&!unknownFixed&&used+delta<=target+.01){s.durationMinutes=next;used+=delta;changed=true;break;}}if(!changed)break;}
+ for(let pass=0;pass<150;pass++){let changed=false;for(const i of enduranceOrder){const s=slots.get(i);if(!s||locked.has(i)||s.group||s.type!=='endurance'||s.durationMinutes+15>cap(s.date))continue;const next=s.durationMinutes+15,delta=loadSession({...s,durationMinutes:next})-loadSession(s);if(Number.isFinite(delta)&&delta>=0&&!unknownFixed&&used+delta<=target+.01&&allowed({...s,durationMinutes:next})){s.durationMinutes=next;used+=delta;changed=true;break;}}if(!changed)break;}
  // Use short low-intensity sessions only after the regular allocation and extensions.
  // Never add intensity, exceed available minutes or budget, or replace a reserved day.
  if(sessionCandidates&&!unknownFixed){

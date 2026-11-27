@@ -22,7 +22,9 @@ import {observedTestResult} from './src/workouts/test-results.js';
 import {progressionLevel,candidateSession,boundaryBlocks,minimumProgressiveDuration} from './src/workouts/progression.js';
 import { buildPrivacySafeReport } from './training-analysis-model.js';
 import { deriveAdaptiveWeekPolicy } from './adaptive-week-policy.js';
-import { assessPeriodizationLoad, historyWindow } from './periodization-policy.js';
+import {selectFitnessAnchor,actualLoads,forecastFitness,fitnessCandidateAllowed} from './src/engine/fitness-forecast.js';
+import {renderFitnessForecast} from './src/ui/fitness-forecast.js';
+import {isQuality} from './src/workouts/progression.js';
 import { derivePhaseWorkoutPolicy } from './phase-focus-policy.js';
 import {
   WEEKDAYS,dateKey,parseDate,addDays,monday,weekDates,weekStartOf,weekNumber,
@@ -46,7 +48,7 @@ const app={savingWorkout:false,evaluationToken:0,dashboardRecords:[],feedbackRow
 function status(id,message,kind='') {const el=$(id);if(!el)return;el.textContent=message;el.classList.toggle('is-error',kind==='error');el.classList.toggle('is-good',kind==='good');}
 function htmlNode(tag,cls,text){const el=document.createElement(tag);if(cls)el.className=cls;if(text!==undefined)el.textContent=String(text);return el;}
 function add(parent,tag,cls,text){const node=htmlNode(tag,cls,text);parent.appendChild(node);return node;}
-function cleanUser(){app.savingWorkout=false;app.evaluationToken++;$('l39-analyze-limiters').disabled=false;app.dashboardRecords=[];$('l39-completed-workouts').replaceChildren();app.weekModal=null;app.workoutModal=null;app.proposing=false;app.focusedWeek=null;app.feedbackRows=[];app.feedbackStatus='';app.feedbackBusy=false;app.cloud=null;app.cloudBusy=false;app.cloudQueued=false;app.startupIssue='';app.selectedCalendarDate=null;for(const id of ['l39-cloud-sync','l39-cloud-local','l39-cloud-remote'])$(id).disabled=false;app.userId=null;app.plan=null;app.planDirty=false;app.activityCache.clear();app.detailCache.clear();app.availability.clear();app.wellness=null;app.activityError=null;app.authGeneration++;$('l39-dashboard-body').hidden=true;$('l39-calendar-grid').replaceChildren();$('l39-mobile-calendar').replaceChildren();$('l39-two-weeks').replaceChildren();$('l39-timeline').replaceChildren();$('l39-feedback-list').replaceChildren();$('l39-skill-priorities').replaceChildren();$('l39-feedback-status').textContent='';for(const d of document.querySelectorAll('dialog[open]'))d.close();}
+function cleanUser(){app.savingWorkout=false;app.evaluationToken++;$('l39-analyze-limiters').disabled=false;app.dashboardRecords=[];$('l39-completed-workouts').replaceChildren();app.weekModal=null;app.workoutModal=null;app.proposing=false;app.focusedWeek=null;app.feedbackRows=[];app.feedbackStatus='';app.feedbackBusy=false;app.cloud=null;app.cloudBusy=false;app.cloudQueued=false;app.startupIssue='';app.selectedCalendarDate=null;for(const id of ['l39-cloud-sync','l39-cloud-local','l39-cloud-remote'])$(id).disabled=false;app.userId=null;app.plan=null;app.planDirty=false;app.activityCache.clear();app.detailCache.clear();app.availability.clear();app.wellness=null;app.activityError=null;app.authGeneration++;$('l39-dashboard-body').hidden=true;$('l39-calendar-grid').replaceChildren();$('l39-mobile-calendar').replaceChildren();$('l39-two-weeks').replaceChildren();$('l39-fitness-forecast').replaceChildren();$('l39-timeline').replaceChildren();$('l39-feedback-list').replaceChildren();$('l39-skill-priorities').replaceChildren();$('l39-feedback-status').textContent='';for(const d of document.querySelectorAll('dialog[open]'))d.close();}
 const store=()=>createLocalPlannerStore(localStorage,app.userId,today);
 function localAvailability(){return store().localAvailability();}
 function setLocalAvailability(data){store().setLocalAvailability(data);}
@@ -477,6 +479,37 @@ function saveFeedback(date,value,activityId=null){
   renderFeedbackPanel();syncPlanner({automatic:true});return true;
 }
 function weekWindowStart(){return app.focusedWeek||weekStartOf(today());}
+// Read only. Seed from yesterday, not today's possibly partially completed
+// or planned Intervals state. Use all actual activity load today, once.
+async function fitnessContext(){
+ const now=nowKey(),yesterday=dateKey(addDays(today(),-1));
+ const [rows,records]=await Promise.all([fetchIntervalsWellness(yesterday,yesterday),getActivitiesRange(now,now,{force:true})]);
+ const anchor=selectFitnessAnchor(rows,now),actual=actualLoads(records,now);
+ return anchor&&actual?{anchor,actual}:null;
+}
+function forecastPlanned(context,before,prepared=[]){
+ if(!context)return null;
+ const now=nowKey(),first=weekStartOf(today()),start=parseDate(first),end=parseDate(before);
+ if((end-start)/86400000>56)return null;
+ const rows=[];
+ for(let d=start;d<end;d=addDays(d,7)){
+  const key=dateKey(d),week=effectivePlanWeek(app.plan,key,first).week;
+  const source=prepared.find(p=>p.start===key)?.merged??sessions(key);
+  for(const s of source)if(s.date>=now&&s.date<before)rows.push({date:s.date,load:workoutInfo(s,week).load});
+ }
+ return rows;
+}
+async function showFitnessForecast(start,end,generation,view){
+ const host=$('l39-fitness-forecast');renderFitnessForecast(host,null,{message:'Fitnessgegevens ophalen…'});
+ try{
+  const context=await fitnessContext();
+  if(generation!==app.authGeneration||view!==app.renderNumber)return;
+  if(!context){renderFitnessForecast(host,null);return;}
+  const before=dateKey(addDays(parseDate(end),7)),planned=forecastPlanned(context,before);
+  const points=planned?forecastFitness({...context,planned,end:weekDates(end)[6]}):null;
+  renderFitnessForecast(host,points);
+ }catch{if(generation===app.authGeneration&&view===app.renderNumber)renderFitnessForecast(host,null);}
+}
 async function renderTwoWeeks(){
   if(!app.userId)return;
   const generation=app.authGeneration,view=++app.renderNumber;
@@ -488,6 +521,7 @@ async function renderTwoWeeks(){
     const [one,two]=await Promise.all([availabilityForWeek(start),availabilityForWeek(next)]);
     if(generation!==app.authGeneration||view!==app.renderNumber)return;
     host.replaceChildren();renderWeekCard(host,start,one);renderWeekCard(host,next,two);
+    void showFitnessForecast(start,next,generation,view);
     const local=Object.keys(localAvailability()).length;
     $('l39-availability-hint').textContent=local?`${local} dagaanpassingen staan alleen lokaal in deze browser en zijn niet bevestigd in Supabase.`:
       'Beschikbare uren komen uit de bestaande planner. Je trainingsvoorstellen worden lokaal als concept bewaard.';
@@ -548,16 +582,10 @@ async function proposeWeek(){
     let feedback=[];
     try{feedback=await refreshWorkoutFeedback();}catch(e){app.feedbackRows=[];app.feedbackStatus='Historie niet beschikbaar: '+e.message;renderFeedbackPanel();warnings.push('Geen actuele workoutfeedback; nieuwe niveaus blijven op N1.');}
     if(generation!==app.authGeneration||activePlan!==app.plan)return;
-    // De periode eindigt vóór de huidige week; zo gebruiken we geen halfgevulde
-    // weken voor een trend. Een mislukte historievraag blokkeert de planner niet.
-    let historicalActivities=null;
-    try {
-      const {oldest,newest}=historyWindow(currentWeek);
-      historicalActivities=await getActivitiesRange(oldest,newest);
-    } catch (historyError) {
-      warnings.push('Historische Load tijdelijk niet beschikbaar; geen vierweeksbegrenzing toegepast.');
-      console.warn('Periodiseringshistorie:',historyError);
-    }
+    let fitness=null;
+    try{fitness=await fitnessContext();}catch{}
+    if(generation!==app.authGeneration||activePlan!==app.plan)return;
+    if(!fitness)warnings.push('Geen betrouwbare actuele Fitness/Fatigue-gegevens; mesocycle en bestaande herstelregels blijven leidend.');
 
     // Bereken beide weken voordat we iets in de lokale opslag schrijven.
     // Voor de huidige week tellen uitgevoerde activiteiten eerst mee.
@@ -586,6 +614,7 @@ async function proposeWeek(){
         // Ophalen met force om een eerder geladen browsercache niet
         // onbedoeld als nieuwe stand van de week te beschouwen.
         const records=await getActivitiesRange(weekStart,now,{force:true});
+        if(fitness){fitness.actual=actualLoads(records,now);if(!fitness.actual)fitness=null;}
         const progress=remainingWeekLoad(week.targetLoad,records,weekStart,now);
         completedLoad=progress.completedLoad;
         occupiedDates=progress.occupiedDates;
@@ -608,26 +637,6 @@ async function proposeWeek(){
         }
       }
 
-      // Historie toetst uitsluitend de automatisch voorgestelde belasting.
-      // Het door de gebruiker gekozen mesocycle-weekdoel wijzigen we NIET.
-      if(historicalActivities){
-        const guidance=assessPeriodizationLoad({
-          activities:historicalActivities, currentWeekStart:currentWeek,
-          weekTarget:week.targetLoad, phase:week.phase
-        });
-        if(guidance.status==='insufficient') {
-          warnings.push(`Week ${weekNumber(weekStart)}: ${guidance.reason} Geen automatische trendbegrenzing.`);
-        } else if(guidance.capApplied){
-          const proposedRemaining=Math.max(0,guidance.proposalTarget-completedLoad);
-          remainingTarget=Math.min(remainingTarget,proposedRemaining);
-          warnings.push(`Week ${weekNumber(weekStart)}: ${guidance.reason}`);
-          if(remainingTarget<=0){
-            warnings.push(`Week ${weekNumber(weekStart)}: voorstelgrens bereikt; alleen vaste groepsritten worden behouden.`);
-            groupOnly=true;
-          }
-        }
-      }
-
       const existing=sessions(weekStart);
       const reserved=existing.filter(s=>s.manual===true&&s.date>=now&&!occupiedDates.includes(s.date));
       const restDates=store().manualRestDates(weekStart).filter(d=>d>=now);
@@ -635,8 +644,8 @@ async function proposeWeek(){
       for(const day of reservedDates)if(usable[day])usable[day].available_minutes=0;
       const groups=fixedGroupDates(availability,weekDates(weekStart)).filter(d=>usable[d]?.available_minutes>=15);
       if(reservedDates.size)warnings.push(`Week ${weekNumber(weekStart)}: ${reservedDates.size} handmatig aangepaste dag(en) behouden.`);
-      if(!reservedDates.size&&!groups.length&&!Object.values(usable).some(v=>v.available_minutes>=45)&&!groupOnly){
-        warnings.push(`Week ${weekNumber(weekStart)} heeft geen resterende beschikbare momenten van minstens 45 minuten.`);
+      if(!reservedDates.size&&!groups.length&&!Object.values(usable).some(v=>v.available_minutes>=15)&&!groupOnly){
+        warnings.push(`Week ${weekNumber(weekStart)} heeft geen resterende beschikbare momenten van minstens 15 minuten.`);
         continue;
       }
       // Combineer mesocyclefase en werkelijk uitgevoerde trainingsprikkels.
@@ -659,13 +668,20 @@ async function proposeWeek(){
       const candidateCache=new Map();
       const candidates=(type,durationMinutes,date)=>{const k=type+':'+durationMinutes+':'+date;if(!candidateCache.has(k)){const rows=libraryCandidates({type,phase:week.phase,discipline,priorities,weekIndex:phaseIndex,recent:feedback,levelFor:templateLevel,durationMinutes,date});candidateCache.set(k,rows);}return candidateCache.get(k);};
       const exactLoad=s=>{const k=[s.type,s.durationMinutes,s.protocol,s.templateId,s.level,s.prescribedPhase,s.group].join(':');if(!estimates.has(k))estimates.set(k,workoutInfo(s,week).load??NaN);return estimates.get(k);};
+      const prior=forecastPlanned(fitness,weekStart,prepared);
+      let fatigueRejected=0;
+      const asLoad=s=>({date:s.date,load:exactLoad(s),quality:isQuality(s),recovery:getTemplate(s.templateId)?.category==='recovery'});
+      const allowCandidate=fitness&&prior?(s,existing)=>{const ok=fitnessCandidateAllowed({...fitness,prior,existing:existing.map(asLoad),candidate:asLoad(s),end:dates[6]});if(!ok)fatigueRejected++;return ok;}:null;
       const result=proposeSkillWeek({dates:weekDates(weekStart),availability:usable,target:groupOnly?0:remainingTarget,
         maxQuality:groupOnly?0:phasePolicy.maxQualitySessions,blocked:[...new Set([...phasePolicy.blockedQualityDates,...boundary])],
         qualityTypes:disciplineQualityOrder(app.plan.discipline,week.phase,app.plan.limiter,seen,app.plan.weeks.filter(w=>w.phase===week.phase&&w.start<week.start).length),phase:week.phase,preferLong:aerobicFocus(app.plan.discipline,week.phase,app.plan.limiter),
-        sessionCandidates:candidates,sessionLoad:exactLoad,
+        sessionCandidates:candidates,sessionLoad:exactLoad,allowCandidate,
         fixed:groups,reserved,restDates,reservedLoadFor:s=>workoutInfo(s,week).load??NaN,groupLoadFor:durationMinutes=>workoutInfo({type:'endurance',group:true,durationMinutes},week).load??NaN,
         loadFor:(type,durationMinutes)=>{const k=type+':'+durationMinutes;if(!estimates.has(k))estimates.set(k,workoutInfo(candidateSession(type,durationMinutes,levelFor(type),week.phase),week).load??NaN);return estimates.get(k);}
       });
+      const projection=fitness&&prior?forecastFitness({...fitness,planned:[...prior,...result.sessions.map(asLoad)],end:dates[6]}):null;
+      if(fatigueRejected)warnings.push(`Week ${weekNumber(weekStart)}: Fitness/Fatigue-prognose beperkt intensiteit of extra TSS (${fatigueRejected} kandidaatkeuzes niet passend).`);
+      if(projection?.some(p=>p.date>=weekStart&&p.tsb<-30))warnings.push(`Week ${weekNumber(weekStart)}: voorspelde Form onder −30 ondanks behoud van vaste/handmatige trainingen; beoordeel herstel en pas deze zo nodig aan.`);
       const budget=groupOnly?0:remainingTarget,shortfall=Math.max(0,budget-result.estimatedKnownLoad);
       const freeDates=weekDates(weekStart).filter(d=>!result.sessions.some(s=>s.date===d)&&usable[d]?.available_minutes>=15);
       if(result.unknownFixed)warnings.push(`Week ${weekNumber(weekStart)}: een vaste of handmatige workout heeft geen geldige TSS-schatting; geen aanvullende trainingen voorgesteld.`);
@@ -682,7 +698,7 @@ async function proposeWeek(){
         // Behoud reeds uitgevoerde dagen, inclusief vandaag.
         merged:[...mergeFutureSessions(existing,suggestions,now),...preservedToday]
           .sort((a,b)=>a.date.localeCompare(b.date)),
-        completedLoad,remainingTarget,budget,estimatedLoad:result.estimatedKnownLoad,originalTarget:week.targetLoad,levels});
+        completedLoad,remainingTarget,budget,estimatedLoad:result.estimatedKnownLoad,originalTarget:week.targetLoad,projection,fatigueRejected,levels});
     }
     if(!prepared.length){
       status('l39-plan-status',warnings.join(' ')||'Geen resterende trainingsmomenten beschikbaar.','error');
@@ -690,8 +706,8 @@ async function proposeWeek(){
     }
     if(generation!==app.authGeneration||activePlan!==app.plan)return;
     const replacing=prepared.filter(item=>item.existing.some(s=>s.date>=now&&s.manual!==true));
-    const preview=prepared.map(item=>`Week ${weekNumber(item.start)}: mesocycledoel ${num(item.originalTarget)} TSS · automatisch restbudget ${num(item.budget)} TSS · voorstel ${num(item.estimatedLoad)} TSS\n`+(item.suggestions.length?item.suggestions.map(s=>`${s.date}: ${sessionTitle(s)} · ${s.durationMinutes} min${s.level?' · niveau '+s.level+' ('+(s.manual?'handmatig behouden':item.levels[s.type]?.reason||'standaard')+')':''}`).join('\n'):'Geen aanvullende trainingen')).join('\n\n');
-    if(!window.confirm(`${preview}\n\n${replacing.length?'Bestaande automatische toekomstige trainingen worden vervangen. Handmatige wijzigingen blijven behouden. ':''}Voorstel bevestigen?`))return;
+    const preview=prepared.map(item=>`Week ${weekNumber(item.start)}: mesocycledoel ${num(item.originalTarget)} TSS · automatisch restbudget ${num(item.budget)} TSS · voorstel ${num(item.estimatedLoad)} TSS${item.projection?' · Form min. '+Math.min(...item.projection.filter(p=>p.date>=item.start).map(p=>p.tsb)).toFixed(1):''}\n`+(item.suggestions.length?item.suggestions.map(s=>`${s.date}: ${sessionTitle(s)} · ${s.durationMinutes} min${s.level?' · niveau '+s.level+' ('+(s.manual?'handmatig behouden':item.levels[s.type]?.reason||'standaard')+')':''}`).join('\n'):'Geen aanvullende trainingen')).join('\n\n');
+    if(!window.confirm(`${preview}\n\n${warnings.filter(w=>/Fitness\/Fatigue|voorspelde Form/.test(w)).join('\n')}\n${replacing.length?'Bestaande automatische toekomstige trainingen worden vervangen. Handmatige wijzigingen blijven behouden. ':''}Voorstel bevestigen?`))return;
     if(generation!==app.authGeneration||activePlan!==app.plan)return;
     for(const item of prepared)storeSessions(item.start,item.merged);
     syncPlanner({automatic:true});
