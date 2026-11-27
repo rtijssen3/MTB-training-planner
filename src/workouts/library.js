@@ -83,7 +83,7 @@ export const WORKOUT_LIBRARY=Object.freeze([...endurance,...tempo,...threshold,.
 const byId=new Map(WORKOUT_LIBRARY.map(x=>[x.id,x]));
 export const getTemplate=id=>byId.get(id)||null;
 export const templateTitle=s=>getTemplate(s?.templateId)?.title??null;
-export function validTemplateSession(s){if(s?.protocol!=='library')return !s?.templateId;const t=getTemplate(s.templateId);return !!t&&s.type===t.type&&!s.group&&t.levels.includes(s.level);}
+export function validTemplateSession(s){if(s?.protocol!=='library')return !s?.templateId;const t=getTemplate(s.templateId);return !!t&&s.type===t.type&&!s.group&&t.levels.includes(s.level)&&Number.isInteger(s.durationMinutes)&&s.durationMinutes%15===0&&s.durationMinutes>=minimumDuration(t,s.level)&&s.durationMinutes<=t.max;}
 export function buildLibraryWorkout({templateId,type,durationMinutes,level=1,ftp=300,phase='Opbouw'}){
  const t=getTemplate(templateId);if(!t||type!==t.type||!t.levels.includes(level))throw Error('Onbekende workouttemplate of niveau.');
  if(!Number.isInteger(durationMinutes)||durationMinutes<t.min||durationMinutes>t.max||durationMinutes%15!==0||!Number.isFinite(ftp)||ftp<100||ftp>600)throw Error('Kies een duur die past bij deze workout.');

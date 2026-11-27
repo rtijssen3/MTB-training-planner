@@ -18,6 +18,7 @@ import { fetchIntervalsActivities, fetchIntervalsWellness, testIntervalsConnecti
 import { normalizeActivity } from './intervals-model.js';
 import {workoutInfo} from './src/workouts/workout-service.js';
 import {getTemplate,templateTitle,libraryForCategory,libraryCandidates,minimumDuration} from './src/workouts/library.js';
+import {observedTestResult} from './src/workouts/test-results.js';
 import {progressionLevel,candidateSession,boundaryBlocks} from './src/workouts/progression.js';
 import { buildPrivacySafeReport } from './training-analysis-model.js';
 import { deriveAdaptiveWeekPolicy } from './adaptive-week-policy.js';
@@ -206,8 +207,8 @@ function renderCompletedWorkouts(activities,week){
     const intervalCount=info?.workout?.steps.filter(s=>s.kind==='work').length??0;
     if(intervalCount&&!info?.workout?.test&&['threshold','vo2max','anaerobic','power'].includes(session?.type))compare('Intervallen',String(intervalCount),'Open evaluatie');
     if(!linked)add(expanded,'p','l39-caption',session&&rides.length>1?'Meerdere fietsactiviteiten op deze dag; geen automatische koppeling.':'Geen eenduidig gekoppelde geplande workout.');
-    const rating=linked&&(!session.feedbackActivityId||session.feedbackActivityId===a.id)?session.feedback:null;
-    if(rating)add(expanded,'p','l39-caption','Beoordeling: '+({easy:'Te gemakkelijk',good:'Goed uitvoerbaar',hard:'Te zwaar',neutral:'Niet goed te beoordelen'})[rating]);
+    let rating=linked&&(!session.feedbackActivityId||session.feedbackActivityId===a.id)?session.feedback:null;
+    const ratingLabel={easy:'Te gemakkelijk',good:'Goed uitvoerbaar',hard:'Te zwaar',neutral:'Niet goed te beoordelen'},ratingLine=add(expanded,'p','l39-caption',rating?'Beoordeling: '+ratingLabel[rating]:'');ratingLine.hidden=!rating;
     const toggle=top;toggle.setAttribute('aria-expanded','false');toggle.setAttribute('aria-label',(rating?'Bewerk evaluatie':'Evalueer workout')+' · '+a.name);
     const panel=add(expanded,'div','l39-inline-evaluation');panel.hidden=true;
     toggle.addEventListener('click',async()=>{
@@ -216,12 +217,14 @@ function renderCompletedWorkouts(activities,week){
       const generation=app.authGeneration,token=app.evaluationToken;panel.replaceChildren();
       if(!linked){add(panel,'p','l39-caption','Geen niveauadvies mogelijk zonder unieke koppeling met een bewaarde workout.');return;}
       add(panel,'p','l39-caption','Uitvoering ophalen…');
-      let detail=null;
-      if(['threshold','vo2max','anaerobic','power'].includes(session.type)&&!session.group)try{detail=await fetchActivityDetailForPlanning(a.id);}catch{}
+      let detail=null,testResult=null;
+      if(info?.workout?.test){try{testResult=observedTestResult(session,await fetchSkillHistory(a.date,a.date));}catch{testResult={known:false,values:[],note:'Testgegevens niet beschikbaar. Probeer later opnieuw.'};}}
+      else if(['threshold','vo2max','anaerobic','power'].includes(session.type)&&!session.group)try{detail=await fetchActivityDetailForPlanning(a.id);}catch{}
       if(generation!==app.authGeneration||token!==app.evaluationToken||!panel.isConnected||panel.hidden)return;
       const row=evaluateExecution(session,info?.workout,rides,detail);
       panel.replaceChildren();
-      if(row.required)add(panel,'p','l39-caption',`Intervallen: ${row.evidence==='unknown'?'onbekend':row.matched+' / '+row.required} · ${row.reason}`);
+      if(testResult){add(panel,'strong','','Waargenomen testresultaat');for(const value of testResult.values){const r=add(panel,'div','l39-activity-row');add(r,'span','',value.label);add(r,'strong','',value.value+' '+value.unit);}add(panel,'p','l39-caption',testResult.note);add(panel,'p','l39-caption','Analyseer het vaardigheidsprofiel opnieuw om nieuwe waargenomen vermogensrecords te verwerken.');}
+      else if(row.required)add(panel,'p','l39-caption',`Intervallen: ${row.evidence==='unknown'?'onbekend':row.matched+' / '+row.required} · ${row.reason}`);
       else add(panel,'p','l39-caption',session.group?'Groepsrit: TSS is een Z2-schatting; geen niveauadvies.':session.type==='endurance'?'Duurtraining: beoordeling wordt bewaard, geen intervalniveau.':row.reason);
       const form=add(panel,'form','l39-evaluation-form');add(form,'strong','','Hoe heb je de training ervaren?');
       const choices=add(form,'fieldset','l39-evaluation-options');choices.setAttribute('aria-label','Eigen beoordeling');
@@ -236,9 +239,10 @@ function renderCompletedWorkouts(activities,week){
       const messageEl=add(form,'p','l39-status');messageEl.setAttribute('role','status');
       form.addEventListener('submit',e=>{e.preventDefault();if(generation!==app.authGeneration||!RATINGS.includes(selected))return;
         const current=getSession(a.date),currentRides=activityMatches(current,app.dashboardRecords);
-        if(!current||currentRides.length!==1||currentRides[0].id!==a.id){messageEl.textContent='Koppeling is gewijzigd. Vernieuw het dashboard.';return;}
+        if(!current||['type','group','durationMinutes','protocol','level','templateId','prescribedPhase'].some(k=>current[k]!==session[k])||currentRides.length!==1||currentRides[0].id!==a.id){messageEl.textContent='Koppeling is gewijzigd. Vernieuw het dashboard.';return;}
         if(!saveFeedback(a.date,selected,a.id)){messageEl.textContent='Niet bewaard. Probeer opnieuw.';return;}
-        messageEl.textContent='Evaluatie bewaard. Volgende trainingsvoorstellen houden rekening met je beoordeling.';done.textContent='⌃';
+        rating=selected;session.feedback=selected;session.feedbackActivityId=a.id;ratingLine.hidden=false;ratingLine.textContent='Beoordeling: '+ratingLabel[rating];toggle.setAttribute('aria-label','Bewerk evaluatie · '+a.name);
+        messageEl.textContent=info?.workout?.test?'Evaluatie bewaard. FTP is niet gewijzigd.':'Evaluatie bewaard. Volgende trainingsvoorstellen houden rekening met je beoordeling.';done.textContent='⌃';
       });
     });
   }
@@ -916,12 +920,13 @@ async function saveWorkout(event){
       const {state}=await initializeAvailability(app.userId,parseDate(start));
       if(generation!==app.authGeneration||modal!==app.workoutModal)return;
       if(state.getPendingCount()>0)throw Error('Bewaar eerst de openstaande wijzigingen in beschikbaarheid.');
-      const current=state.getSaved(date),minutes=Math.max(current.available_minutes,capacity??0,s.durationMinutes);
+      const current=state.getSaved(date),overrides=localAvailability(),local=Object.hasOwn(overrides,date)?overrides[date]:null,minutes=Math.max(current.available_minutes,Number.isFinite(local)?local:0,s.durationMinutes);
       if(minutes>current.available_minutes){
         await saveCalendarChecked([{date,action:'upsert',available_minutes:minutes,fixed_workout:current.fixed_workout}],state.revision);
         if(generation!==app.authGeneration||modal!==app.workoutModal)return;
-        const overrides=localAvailability();delete overrides[date];setLocalAvailability(overrides);app.availability.delete(start);
-      }
+        delete overrides[date];setLocalAvailability(overrides);
+      }else if(Number.isFinite(local)&&local<s.durationMinutes){delete overrides[date];setLocalAvailability(overrides);}
+      app.availability.delete(start);
     }catch(e){if(generation===app.authGeneration)status('l39-workout-modal-status','Beschikbaarheid niet opgeslagen: '+e.message+'. Training niet gewijzigd; probeer opnieuw.','error');return;}
     finally{if(generation===app.authGeneration){app.savingWorkout=false;save.disabled=false;}}
   }
