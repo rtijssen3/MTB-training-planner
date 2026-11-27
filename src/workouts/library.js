@@ -28,7 +28,7 @@ const tempo=[
  Q('tempo-wave','Tempo golven','threshold','muscular',[m(3,78,'Tempo laag'),m(3,88,'Tempo hoog'),m(3,82,'Tempo')],[2,3,4],{category:'tempo',phases:BASE,gap:180}),
  Q('tempo-pyramid','Tempo piramide','threshold','muscular',[m(6,80,'Tempo'),m(10,86,'Tempo'),m(6,80,'Tempo')],[1,2,2],{category:'tempo',phases:BASE,gap:240}),
  Q('sweetspot-finish','Sweet Spot met versnelling','threshold','muscular',[m(8,88,'Sweet Spot'),m(2,96,'Drempel')],[2,3,4],{category:'tempo',phases:BASE,gap:240}),
- Q('sprint-sweetspot','Sprint Building Sweetspot','threshold','muscular',[m(7,88,'Sweet Spot'),b(12,180,'Krachtige sprint'),b(408,88,'Sweet Spot')],[2,3,3],{category:'tempo',secondary:['power','anaerobic'],disciplines:['xco','road'],phases:['Build'],gap:300,min:60})
+ Q('sprint-sweetspot','Sprint Building Sweetspot','threshold','muscular',[],[1,1,1],{category:'tempo',secondary:['power','anaerobic'],disciplines:['xco','road'],phases:['Build'],gap:0,min:60,warmupSeconds:900,cooldownSeconds:300,sequenceByLevel:[{tempoMinutes:10,sprints:4},{tempoMinutes:12,sprints:5},{tempoMinutes:15,sprints:6}]})
 ];
 const threshold=[
  Q('threshold-long','Threshold lange blokken','threshold','muscular',[m(20,98,'Drempel')],[1,2,2],{disciplines:['road','gravel'],phases:BASE,gap:300}),
@@ -84,20 +84,33 @@ const byId=new Map(WORKOUT_LIBRARY.map(x=>[x.id,x]));
 export const getTemplate=id=>byId.get(id)||null;
 export const templateTitle=s=>getTemplate(s?.templateId)?.title??null;
 export function validTemplateSession(s){if(s?.protocol!=='library')return !s?.templateId;const t=getTemplate(s.templateId);return !!t&&s.type===t.type&&!s.group&&t.levels.includes(s.level)&&Number.isInteger(s.durationMinutes)&&s.durationMinutes%15===0&&s.durationMinutes>=minimumDuration(t,s.level)&&s.durationMinutes<=t.max;}
+// Sweetspot first, then a separate sprint series. Introduction follows the user's
+// reference: 15 min warm-up, 2 x 10 min @90%, 5 min recovery after each,
+// 4 x (10 s @150% + 3 min recovery), 5 min cooldown. Higher levels are our own progression.
+function prescribedBlocks(t,level){
+ if(t.sequenceByLevel){
+  const {tempoMinutes,sprints}=t.sequenceByLevel[level-1],blocks=[];
+  for(let i=0;i<2;i++)blocks.push(m(tempoMinutes,90,'Sweet Spot'),b(300,55,'Herstel','recovery'));
+  for(let i=0;i<sprints;i++)blocks.push(b(10,150,'Sprint '+(i+1)+'/'+sprints),b(180,55,'Sprint herstel','recovery'));
+  return blocks;
+ }
+ const blocks=[],count=t.reps[level-1];
+ for(let i=0;i<count;i++){if(i&&t.gap)blocks.push(r(t.gap));blocks.push(...t.pattern);}
+ return blocks;
+}
 export function buildLibraryWorkout({templateId,type,durationMinutes,level=1,ftp=300,phase='Opbouw'}){
  const t=getTemplate(templateId);if(!t||type!==t.type||!t.levels.includes(level))throw Error('Onbekende workouttemplate of niveau.');
  if(!Number.isInteger(durationMinutes)||durationMinutes<t.min||durationMinutes>t.max||durationMinutes%15!==0||!Number.isFinite(ftp)||ftp<100||ftp>600)throw Error('Kies een duur die past bij deze workout.');
  if(phase==='Herstel'&&(t.quality||t.test))throw Error('Geen zware training of prestatietest in herstelweek.');
- const steps=[],total=durationMinutes*60,warm=t.quality||t.test?720:Math.min(360,Math.floor(total/5)),cool=t.quality||t.test?480:Math.min(240,Math.floor(total/6));
+ const steps=[],total=durationMinutes*60,warm=t.warmupSeconds??(t.quality||t.test?720:Math.min(360,Math.floor(total/5))),cool=t.cooldownSeconds??(t.quality||t.test?480:Math.min(240,Math.floor(total/6)));
  const add=s=>{if(s.seconds>0)steps.push({...s,watts:Math.round(ftp*s.percentFtp/100)});};
  add(b(warm,55,'Warming-up','warmup'));
  if(t.weights){
    const active=total-warm-cool,weight=t.weights.reduce((n,x)=>n+x[0],0);let used=0;
    t.weights.forEach(([w,p],i)=>{const seconds=i===t.weights.length-1?active-used:Math.floor(active*w/weight);used+=seconds;add(b(seconds,p,'Duurwerk','endurance'));});
  }else{
-   const count=t.reps[level-1],blocks=[];
-   for(let i=0;i<count;i++){if(i&&t.gap)blocks.push(r(t.gap));blocks.push(...t.pattern);}
-   const extra=total-warm-cool-blocks.reduce((s,x)=>s+x.seconds,0);if(extra<0)throw Error('Dit niveau past niet in de gekozen duur.');
+   const blocks=prescribedBlocks(t,level);
+   const extra=total-warm-cool-blocks.reduce((s,x)=>s+x.seconds,0);if(extra<0)throw Error('Dit niveau vereist minimaal '+minimumDuration(t,level)+' minuten.');
    if(t.id==='late-threshold-v1')add(b(extra,65,'Duurwerk vóór drempel','endurance'));
    blocks.forEach(add);if(t.id!=='late-threshold-v1')add(b(extra,t.test?50:62,t.test?'Rustig uitrijden':'Rustig duurwerk','endurance'));
  }
@@ -105,7 +118,7 @@ export function buildLibraryWorkout({templateId,type,durationMinutes,level=1,ftp
  return {type,title:t.title,templateId:t.id,protocol:'library',level,durationMinutes,ftp,phase,steps,hardMinutes:steps.filter(s=>s.kind==='work').reduce((n,s)=>n+s.seconds,0)/60,test:!!t.test,variable:!!t.variable,quality:t.quality,instructions:t.instructions??'',primary:t.primary,secondary:t.secondary};
 }
 export function libraryForCategory(type){return WORKOUT_LIBRARY.filter(t=>type==='test'?t.test:!t.test&&t.type===type);}
-export function minimumDuration(t,level=1){const warm=t.quality||t.test?1200:600,active=t.pattern?t.pattern.reduce((n,s)=>n+s.seconds,0)*t.reps[level-1]+t.gap*(t.reps[level-1]-1):0;return Math.max(t.min,15*Math.ceil((warm+active)/900));}
+export function minimumDuration(t,level=1){const warm=(t.warmupSeconds??(t.quality||t.test?720:360))+(t.cooldownSeconds??(t.quality||t.test?480:240)),active=t.pattern?prescribedBlocks(t,level).reduce((n,s)=>n+s.seconds,0):0;return Math.max(t.min,15*Math.ceil((warm+active)/900));}
 export function libraryCandidates({type,phase,discipline,priorities={},weekIndex=0,recent=[],levelFor=()=>1,durationMinutes,date=''}){
  const suitable=WORKOUT_LIBRARY.filter(t=>!t.test&&t.type===type&&t.disciplines.includes(discipline)&&t.phases.includes(phase)&&durationMinutes>=t.min&&durationMinutes<=t.max&&(phase==='Recovery'?t.category==='recovery'||t.type==='skills':t.category!=='recovery'));
  const scores=(t,i)=>{

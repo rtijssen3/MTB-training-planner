@@ -9,6 +9,8 @@ export function progressionLevel(plan,week){
  return Math.min(3,1+Math.floor(earlier/2));
 }
 
+export function minimumProgressiveDuration(type,level){const spec=SPECS[type]?.[level-1];if(!spec)return null;const [reps,work,,rest]=spec;return Math.max(45,15*Math.ceil((1200+reps*work+(reps-1)*rest)/900));}
+
 export function buildProgressiveWorkout({type,durationMinutes,ftp=300,level,phase='Opbouw'}){
  if(!Number.isInteger(level)||level<1||level>3||!Object.hasOwn(SPECS,type))throw Error('Ongeldige progressieve workout.');
  if(!Number.isInteger(durationMinutes)||durationMinutes<45||durationMinutes>360||!Number.isFinite(ftp)||ftp<100||ftp>600)throw Error('Kies 45–360 minuten en geldige FTP.');

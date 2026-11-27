@@ -19,7 +19,7 @@ import { normalizeActivity } from './intervals-model.js';
 import {workoutInfo} from './src/workouts/workout-service.js';
 import {getTemplate,templateTitle,libraryForCategory,libraryCandidates,minimumDuration} from './src/workouts/library.js';
 import {observedTestResult} from './src/workouts/test-results.js';
-import {progressionLevel,candidateSession,boundaryBlocks} from './src/workouts/progression.js';
+import {progressionLevel,candidateSession,boundaryBlocks,minimumProgressiveDuration} from './src/workouts/progression.js';
 import { buildPrivacySafeReport } from './training-analysis-model.js';
 import { deriveAdaptiveWeekPolicy } from './adaptive-week-policy.js';
 import { assessPeriodizationLoad, historyWindow } from './periodization-policy.js';
@@ -886,7 +886,7 @@ function renderWorkoutPreview(){
     if(s.type==='rest'){$('l39-workout-tss').textContent='0';$('l39-workout-hard').textContent='0';add(steps,'p','l39-caption','Rustdag: geen gestructureerde workout.');return}
     if(info.reason){
       $('l39-workout-tss').textContent='—';$('l39-workout-hard').textContent='—';
-      add(steps,'p','l39-caption',info.reason);status('l39-workout-modal-status',info.reason);return;
+      add(steps,'p','l39-caption',info.reason);status('l39-workout-modal-status',info.reason,'error');return;
     }
     $('l39-workout-tss').textContent=num(info.load)+(info.estimatedTest?' (indicatief)':'');$('l39-workout-hard').textContent=formatIntensityMinutes(info.workout.hardMinutes);
     if(s.type==='group')add(steps,'p','l39-caption','Z2-referentie voor TSS; de werkelijke groepsrit is variabel.');
@@ -1011,10 +1011,24 @@ function registerListeners(){
   for(const id of ['l39-workout-dialog','l39-week-dialog'])$(id).addEventListener('cancel',e=>{if(app.savingWorkout)e.preventDefault()});
   $('l39-copy-workout').addEventListener('click',copyWorkout);
   $('l39-export-workout').addEventListener('click',exportWorkout);
-  const selectTemplate=()=>{const t=getTemplate($('l39-workout-template').value);if(t){const level=Number($('l39-workout-level').value);if(!t.levels.includes(level))$('l39-workout-level').value='1';const min=minimumDuration(t,Number($('l39-workout-level').value));if(t.test)$('l39-workout-duration').value=String(t.min);else $('l39-workout-duration').value=String(Math.min(t.max,Math.max(min,Number($('l39-workout-duration').value)||min)));}renderWorkoutPreview();};
+  const selectTemplate=()=>{
+    const t=getTemplate($('l39-workout-template').value),levelControl=$('l39-workout-level'),duration=$('l39-workout-duration');
+    if(t){
+      if(!t.levels.includes(Number(levelControl.value)))levelControl.value='1';
+      const min=minimumDuration(t,Number(levelControl.value));
+      if(t.test)duration.value=String(t.min);
+      else duration.value=String(Math.min(t.max,Math.max(min,Number(duration.value)||min)));
+    }else if($('l39-workout-protocol').value==='progressive'){
+      const min=minimumProgressiveDuration($('l39-workout-type').value,Number(levelControl.value));
+      if(min!==null&&Number(duration.value)<min)duration.value=String(min);
+    }
+    renderWorkoutPreview();
+  };
   $('l39-workout-type').addEventListener('input',()=>{populateWorkoutTemplates('');selectTemplate();});
   $('l39-workout-template').addEventListener('input',selectTemplate);
-  for(const id of ['l39-workout-duration','l39-workout-protocol','l39-workout-level'])$(id).addEventListener('input',renderWorkoutPreview);
+  $('l39-workout-duration').addEventListener('input',renderWorkoutPreview);
+  $('l39-workout-protocol').addEventListener('input',selectTemplate);
+  $('l39-workout-level').addEventListener('input',selectTemplate);
   $('l39-cloud-enabled').addEventListener('change',()=>{if(app.userId)localStorage.setItem('mtb-cloud-enabled:'+app.userId,$('l39-cloud-enabled').checked?'1':'0');});
   $('l39-cloud-sync').addEventListener('click',()=>syncPlanner());
   $('l39-cloud-local').addEventListener('click',()=>{if(confirm('Lokale versie als cloudversie bewaren? Alleen bij een conflict wordt de cloudversie vervangen.'))syncPlanner({resolveConflict:'local'});});
