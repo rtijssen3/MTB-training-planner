@@ -19,7 +19,8 @@ import { normalizeActivity } from './intervals-model.js';
 import {workoutInfo} from './src/workouts/workout-service.js';
 import {getTemplate,templateTitle,libraryForCategory,libraryCandidates,minimumDuration} from './src/workouts/library.js';
 import {observedTestResult} from './src/workouts/test-results.js';
-import {progressionLevel,candidateSession,boundaryBlocks,minimumProgressiveDuration} from './src/workouts/progression.js';
+import {LEGACY_SELECTION,editorOptions,editorSelection,editorMinimum} from './src/workouts/editor-selection.js';
+import {progressionLevel,candidateSession,boundaryBlocks} from './src/workouts/progression.js';
 import { buildPrivacySafeReport } from './training-analysis-model.js';
 import { deriveAdaptiveWeekPolicy } from './adaptive-week-policy.js';
 import {selectFitnessAnchor,actualLoads,forecastFitness,fitnessCandidateAllowed} from './src/engine/fitness-forecast.js';
@@ -856,26 +857,45 @@ async function openWorkout(date){
     $('l39-workout-type').value=s?(s.group?'group':getTemplate(s.templateId)?.test?'test':s.type):store().manualRestDates(start).includes(date)?'rest':isGroupRide(fixed)?'group':'endurance';
     $('l39-workout-duration').value=String(s?.durationMinutes|| (capacity<15?60:isGroupRide(fixed)?Math.min(360,Math.floor(capacity/15)*15):Math.max(15,Math.min(60,Math.floor(capacity/15)*15))));
     $('l39-workout-duration').max='360';
-    populateWorkoutTemplates(s?.templateId??'');
-    $('l39-workout-protocol').value=s?.protocol==='library'?'classic':s?.protocol||'classic';
-    $('l39-workout-level').value=String(s?.level||progressionLevel(app.plan,phase));
+    populateWorkoutTemplates(s?.templateId??(s&&!s.group?LEGACY_SELECTION:''));
+    configureWorkoutSelection({preferred:s?.level??1,fit:!s});
     $('l39-workout-capacity').textContent=`${fmtMinutes(capacity)} beschikbaar · ${phase?.phase??'Geen fase'}`;
     $('l39-workout-form').querySelector('button[type=submit]').disabled=false;$('l39-delete-workout').hidden=!s;
     status('l39-workout-modal-status','');renderWorkoutPreview();$('l39-workout-dialog').showModal();
   }catch(e){status('l39-plan-status',e.message,'error')}
 }
 function populateWorkoutTemplates(selected=''){
- const select=$('l39-workout-template'),type=$('l39-workout-type').value;select.replaceChildren();
- if(type!=='test'){const legacy=add(select,'option','','Bestaand intervalprotocol');legacy.value='';}
- for(const t of libraryForCategory(type)){const o=add(select,'option','',t.title);o.value=t.id;}
- select.value=selected;if(type==='test'&&!select.value)select.selectedIndex=0;
- select.disabled=['group','rest'].includes(type);
+ const select=$('l39-workout-template'),type=$('l39-workout-type').value,rows=editorOptions(type,app.workoutModal.saved);
+ select.replaceChildren();
+ for(const row of rows){const o=add(select,'option','',row.title);o.value=row.id;}
+ select.value=selected;
+ if(!select.value&&rows.length)select.selectedIndex=0;
+ $('l39-workout-template-field').hidden=!rows.length;
+ select.disabled=!rows.length;
+}
+function configureWorkoutSelection({preferred=1,fit=true}={}){
+ const choice=editorSelection($('l39-workout-type').value,$('l39-workout-template').value,app.workoutModal.saved);
+ const level=$('l39-workout-level'),duration=$('l39-workout-duration');
+ const labels={1:'1 · Introductie',2:'2 · Opbouw',3:'3 · Verdieping'};
+ level.replaceChildren();
+ for(const n of choice.levels){const o=add(level,'option','',labels[n]);o.value=String(n);}
+ const n=choice.levels.includes(Number(preferred))?Number(preferred):choice.levels[0]??1;
+ level.value=choice.levels.length?String(n):'';
+ level.disabled=choice.levels.length<=1;$('l39-workout-level-field').hidden=choice.levels.length<=1;
+ duration.disabled=choice.type==='rest'||!!choice.test;
+ $('l39-workout-duration-field').hidden=choice.type==='rest';
+ duration.min=String(editorMinimum(choice,n));duration.max=String(choice.max);
+ if(fit&&choice.type!=='rest'){
+  const min=editorMinimum(choice,n);
+  duration.value=String(choice.test?choice.min:Math.min(choice.max,Math.max(min,Number(duration.value)||min)));
+ }
+ return choice;
 }
 function readWorkoutControls(){
- const t=getTemplate($('l39-workout-template').value);
- const common={date:app.workoutModal.date,durationMinutes:Number($('l39-workout-duration').value),prescribedPhase:app.workoutModal.phase?.phase==='Recovery'?'Herstel':'Opbouw'};
- if(t)return {...common,type:t.type,protocol:'library',templateId:t.id,level:t.levels.length===1?1:Number($('l39-workout-level').value)};
- return {...common,type:$('l39-workout-type').value,protocol:$('l39-workout-protocol').value,...($('l39-workout-protocol').value==='progressive'?{level:Number($('l39-workout-level').value)}:{})};
+ const choice=editorSelection($('l39-workout-type').value,$('l39-workout-template').value,app.workoutModal.saved);
+ const common={date:app.workoutModal.date,durationMinutes:Number($('l39-workout-duration').value),prescribedPhase:app.workoutModal.phase?.phase==='Recovery'?'Herstel':'Opbouw',type:choice.type,protocol:choice.protocol};
+ if(choice.template)return {...common,templateId:choice.templateId,level:choice.levels.length===1?choice.levels[0]:Number($('l39-workout-level').value)};
+ return {...common,...(choice.protocol==='progressive'?{level:Number($('l39-workout-level').value)}:{})};
 }
 function previewWorkoutResult(){
   if(!app.workoutModal)throw new Error('Geen dag geselecteerd.');
@@ -883,18 +903,15 @@ function previewWorkoutResult(){
   if(s.type==='rest')return {s,info:null};
   if(s.type==='group')return {s,info:workoutInfo({...s,group:true},app.workoutModal.phase)};
   const old=app.workoutModal.saved;
-  if(old&&old.type===s.type&&old.protocol===s.protocol&&old.level===s.level&&old.templateId===s.templateId&&old.durationMinutes===s.durationMinutes&&old.prescribedPhase)s.prescribedPhase=old.prescribedPhase;
+  if(old&&old.type===s.type&&old.protocol===s.protocol&&(old.protocol!=='progressive'&&old.protocol!=='library'||old.level===s.level)&&old.templateId===s.templateId&&old.prescribedPhase)s.prescribedPhase=old.prescribedPhase;
+  // Older fixed protocols may contain a redundant level; retain it only when
+  // reopening that exact saved recipe, never display it as a selectable level.
+  if(old&&$('l39-workout-template').value===LEGACY_SELECTION&&old.protocol!=='progressive'&&old.level!==undefined)s.level=old.level;
   return {s,info:workoutInfo(s,app.workoutModal.phase)};
 }
 function renderWorkoutPreview(){
   const host=$('l39-workout-chart'),steps=$('l39-workout-steps');host.replaceChildren();steps.replaceChildren();
   const type=$('l39-workout-type').value,template=getTemplate($('l39-workout-template').value);
-  const progressive=['threshold','vo2max','force','skills','anaerobic','power'].includes(type);
-  $('l39-workout-protocol').disabled=!!template||!progressive;
-  $('l39-workout-protocol').querySelector('option[value=long]').disabled=!['threshold','vo2max'].includes(type);
-  if(!progressive||$('l39-workout-protocol').value==='long'&&!['threshold','vo2max'].includes(type))$('l39-workout-protocol').value='classic';
-  $('l39-workout-level').disabled=template?template.levels.length===1:!progressive||$('l39-workout-protocol').value!=='progressive';
-  $('l39-workout-duration').disabled=type==='rest'||!!template?.test;
   $('l39-copy-workout').disabled=type==='group'||type==='rest';$('l39-export-workout').disabled=type==='group'||type==='rest'||!!template?.variable||!!template?.pattern?.some(s=>s.effort==='max');
   try{
     const {s,info}=previewWorkoutResult();
@@ -1028,24 +1045,11 @@ function registerListeners(){
   for(const id of ['l39-workout-dialog','l39-week-dialog'])$(id).addEventListener('cancel',e=>{if(app.savingWorkout)e.preventDefault()});
   $('l39-copy-workout').addEventListener('click',copyWorkout);
   $('l39-export-workout').addEventListener('click',exportWorkout);
-  const selectTemplate=()=>{
-    const t=getTemplate($('l39-workout-template').value),levelControl=$('l39-workout-level'),duration=$('l39-workout-duration');
-    if(t){
-      if(!t.levels.includes(Number(levelControl.value)))levelControl.value='1';
-      const min=minimumDuration(t,Number(levelControl.value));
-      if(t.test)duration.value=String(t.min);
-      else duration.value=String(Math.min(t.max,Math.max(min,Number(duration.value)||min)));
-    }else if($('l39-workout-protocol').value==='progressive'){
-      const min=minimumProgressiveDuration($('l39-workout-type').value,Number(levelControl.value));
-      if(min!==null&&Number(duration.value)<min)duration.value=String(min);
-    }
-    renderWorkoutPreview();
-  };
+  const selectTemplate=()=>{configureWorkoutSelection({preferred:1});renderWorkoutPreview();};
   $('l39-workout-type').addEventListener('input',()=>{populateWorkoutTemplates('');selectTemplate();});
   $('l39-workout-template').addEventListener('input',selectTemplate);
   $('l39-workout-duration').addEventListener('input',renderWorkoutPreview);
-  $('l39-workout-protocol').addEventListener('input',selectTemplate);
-  $('l39-workout-level').addEventListener('input',selectTemplate);
+  $('l39-workout-level').addEventListener('input',()=>{configureWorkoutSelection({preferred:Number($('l39-workout-level').value)});renderWorkoutPreview();});
   $('l39-cloud-enabled').addEventListener('change',()=>{if(app.userId)localStorage.setItem('mtb-cloud-enabled:'+app.userId,$('l39-cloud-enabled').checked?'1':'0');});
   $('l39-cloud-sync').addEventListener('click',()=>syncPlanner());
   $('l39-cloud-local').addEventListener('click',()=>{if(confirm('Lokale versie als cloudversie bewaren? Alleen bij een conflict wordt de cloudversie vervangen.'))syncPlanner({resolveConflict:'local'});});
