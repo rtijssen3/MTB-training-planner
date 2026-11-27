@@ -558,7 +558,7 @@ function renderWeekCard(host,start,availability){
     add(day,'span','capacity','beschikbaar');
     const session=getSession(key),manualRest=store().manualRestDates(start).includes(key);const button=add(day,'button',`l39-session-button${session?'':' rest'}`,
       session?(sessionTitle(session)):
-        (manualRest?'Rust':availability[key]?.workout?fixedLabel(availability[key].workout):key<nowKey()?'—':'+ Training'));
+        (manualRest?'Rust':key<nowKey()?'—':mins>0&&availability[key]?.workout?fixedLabel(availability[key].workout):'+ Training'));
     button.type='button';button.dataset.action='workout';button.dataset.date=key;
     if(session){
       const load=info.loads.get(key);
@@ -1000,14 +1000,26 @@ async function saveWorkout(event){
   const feedback=app.activeTab==='dashboard'?'l39-dashboard-status':app.activeTab==='calendar'?'l39-calendar-status':'l39-plan-status';
   status(feedback,'Training lokaal opgeslagen. Handmatige wijzigingen blijven behouden bij een nieuw trainingsvoorstel. Intervals.icu is niet gewijzigd.','good');
 }
-function deleteWorkout(){
+async function deleteWorkout(){
   const modal=app.workoutModal;if(!app.userId||!modal||app.proposing||app.savingWorkout||modal.date<nowKey()||!getSession(modal.date))return;
-  const {date,start}=modal;
-  if(!confirm('Verwijder de geplande training uit de planner? Beschikbaarheid en eventuele export naar Intervals.icu blijven behouden.'))return;
-  storeSessions(start,sessions(start).filter(s=>s.date!==date),{restDates:[...store().manualRestDates(start),date]});
-  $('l39-workout-dialog').close();syncPlanner({automatic:true});
-  if(app.activeTab==='calendar')loadCalendar();else if(app.activeTab==='dashboard')loadDashboard();else renderTwoWeeks();
-  status(app.activeTab==='dashboard'?'l39-dashboard-status':app.activeTab==='calendar'?'l39-calendar-status':'l39-plan-status','Training verwijderd. Beschikbaarheid en Intervals.icu ongewijzigd.','good');
+  const {date,start}=modal,generation=app.authGeneration;
+  if(!confirm('Verwijder de geplande training en zet de beschikbaarheid voor deze datum op 0 minuten? Een eventuele export naar Intervals.icu blijft behouden.'))return;
+  const button=$('l39-delete-workout'),save=$('l39-workout-form').querySelector('button[type=submit]');
+  app.savingWorkout=true;button.disabled=true;save.disabled=true;
+  try{
+    const {state}=await initializeAvailability(app.userId,parseDate(start));
+    if(generation!==app.authGeneration||modal!==app.workoutModal)return;
+    if(state.getPendingCount()>0)throw Error('Bewaar eerst de openstaande wijzigingen in beschikbaarheid.');
+    const current=state.getSaved(date);
+    await saveCalendarChecked([{date,action:'upsert',available_minutes:0,fixed_workout:current.fixed_workout}],state.revision);
+    if(generation!==app.authGeneration||modal!==app.workoutModal)return;
+    const overrides=localAvailability();delete overrides[date];setLocalAvailability(overrides);app.availability.delete(start);
+    storeSessions(start,sessions(start).filter(s=>s.date!==date),{restDates:store().manualRestDates(start).filter(d=>d!==date)});
+    $('l39-workout-dialog').close();syncPlanner({automatic:true});
+    if(app.activeTab==='calendar')loadCalendar();else if(app.activeTab==='dashboard')loadDashboard();else await renderTwoWeeks();
+    status(app.activeTab==='dashboard'?'l39-dashboard-status':app.activeTab==='calendar'?'l39-calendar-status':'l39-plan-status','Training verwijderd; beschikbaarheid 0m. Intervals.icu ongewijzigd.','good');
+  }catch(e){if(generation===app.authGeneration)status('l39-workout-modal-status','Verwijderen niet voltooid: '+e.message,'error');}
+  finally{if(generation===app.authGeneration){app.savingWorkout=false;button.disabled=false;save.disabled=false;}}
 }
 async function exportWorkout(){
   const b=$('l39-export-workout');if(b.disabled)return;
