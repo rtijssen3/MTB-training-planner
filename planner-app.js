@@ -742,7 +742,7 @@ function savePlan(){
 
 // MODAL: WEEK AVAILABILITY --------------------------------------
 async function openAvailability(start){
-  if(!app.userId)return;
+  if(!app.userId||app.savingWorkout)return;
   const generation=app.authGeneration;
   try{
     const values=await availabilityForWeek(start);
@@ -821,7 +821,7 @@ async function saveAvailability(event){
 
 // MODAL: WORKOUT --------------------------------------------------
 async function openWorkout(date){
-  if(!app.userId||date<nowKey())return;
+  if(!app.userId||date<nowKey()||app.savingWorkout)return;
   const start=weekStartOf(parseDate(date)),generation=app.authGeneration;
   try{
     const available=await availabilityForWeek(start);
@@ -839,7 +839,7 @@ async function openWorkout(date){
     $('l39-workout-protocol').value=s?.protocol==='library'?'classic':s?.protocol||'classic';
     $('l39-workout-level').value=String(s?.level||progressionLevel(app.plan,phase));
     $('l39-workout-capacity').textContent=`${fmtMinutes(capacity)} beschikbaar · ${phase?.phase??'Geen fase'}`;
-    $('l39-delete-workout').hidden=!s;
+    $('l39-workout-form').querySelector('button[type=submit]').disabled=false;$('l39-delete-workout').hidden=!s;
     status('l39-workout-modal-status','');renderWorkoutPreview();$('l39-workout-dialog').showModal();
   }catch(e){status('l39-plan-status',e.message,'error')}
 }
@@ -906,7 +906,7 @@ async function saveWorkout(event){
   if(s.type!=='rest'){
     const check=manualWorkoutValidation({type:s.type,durationMinutes:s.durationMinutes,capacity});
     if(!check.valid){status('l39-workout-modal-status','Gebruik 15–360 minuten in stappen van 15 minuten.','error');return;}
-    if(s.type!=='group'&&info.reason){status('l39-workout-modal-status',info.reason,'error');return}
+    if(s.type!=='group'&&info?.reason){status('l39-workout-modal-status',info.reason,'error');return}
   }
   if(app.proposing){status('l39-workout-modal-status','Wacht tot het trainingsvoorstel is afgerond.','error');return;}
   if(s.type!=='rest'){

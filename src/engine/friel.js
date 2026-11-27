@@ -53,7 +53,7 @@ export function proposeSkillWeek({dates,availability,target,maxQuality=2,blocked
  const enduranceOrder=preferLong?[0,1,2,3,4,5,6].sort((a,b)=>cap(dates[b])-cap(dates[a])||[6,2,5,1,3,0,4].indexOf(a)-[6,2,5,1,3,0,4].indexOf(b)):[6,2,5,1,3,0,4];
  for(const i of enduranceOrder){if(slots.size>=6||slots.has(i)||cap(dates[i])<45)continue;if(unknownFixed||used>=target)break;const type=phase==='Base'&&!Array.from(slots.values()).some(s=>s.type==='skills')&&i!==6&&(!preferLong||cap(dates[i])<=90)?'skills':'endurance';
   // Gravel / aerobic emphasis: spend the available budget on a longer steady ride before filling additional days.
-  let placed=false;if(preferLong&&type==='endurance'){for(let minutes=cap(dates[i]);minutes>=45;minutes-=15){if(put(i,type,minutes)){placed=true;break;}}}if(!placed)put(i,type,45);}
+  let placed=false;if(preferLong&&type==='endurance'){for(let minutes=cap(dates[i]);minutes>=45;minutes-=15){if(put(i,type,minutes)){placed=true;break;}}}if(!placed&&sessionCandidates&&cap(dates[i])>=60)placed=put(i,type,60);if(!placed)put(i,type,45);}
  for(let pass=0;pass<150;pass++){let changed=false;for(const i of enduranceOrder){const s=slots.get(i);if(!s||locked.has(i)||s.group||s.type!=='endurance'||s.durationMinutes+15>cap(s.date))continue;const next=s.durationMinutes+15,delta=loadSession({...s,durationMinutes:next})-loadSession(s);if(Number.isFinite(delta)&&delta>=0&&!unknownFixed&&used+delta<=target+.01){s.durationMinutes=next;used+=delta;changed=true;break;}}if(!changed)break;}
  return {sessions:[...slots.values()].sort((a,b)=>a.date.localeCompare(b.date)),estimatedKnownLoad:used,unknownFixed};
 }

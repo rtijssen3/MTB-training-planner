@@ -113,7 +113,8 @@ export function libraryCandidates({type,phase,discipline,priorities={},weekIndex
   const repeat=recentEnough&&recentRows.length===1&&['easy','good'].includes(last.rating)?3:0;
   const fatigue=last?.rating==='hard'&&recentEnough?-4:0;
   const emphasis=priorities[t.primary]??3,secondary=t.secondary.reduce((n,k)=>n+(priorities[k]??3),0)*.12;
-  const rotation=(i-(weekIndex%Math.max(1,suitable.length))+suitable.length)%Math.max(1,suitable.length);
+  const dayOffset=type==='endurance'&&date?Math.floor(Date.parse(date)/86400000)%7:0;
+  const rotation=(i-((weekIndex+dayOffset)%Math.max(1,suitable.length))+suitable.length)%Math.max(1,suitable.length);
   return emphasis+secondary+repeat+fatigue+(t.disciplines.length<3?.25:0)-rotation*.3;
  };
  const ordered=suitable.map((t,i)=>({t,score:scores(t,i)})).sort((a,b)=>b.score-a.score);
