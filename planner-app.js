@@ -6,7 +6,7 @@ import {createCloudSync} from './src/data/cloud-sync.js';
 import {readSnapshot} from './src/data/planner-snapshot.js';
 import {normalizePlannerAvailability,isGroupRide,fixedGroupDates} from './src/core/planner-adapters.js';
 import {proposeSkillWeek} from './src/engine/friel.js';
-import {disciplineTargets,disciplineQualityOrder,normalizeDiscipline,normalizeLimiter,aerobicFocus} from './src/engine/discipline-policy.js';
+import {disciplineTargets,disciplineQualityOrder,phasePosition,phaseAbilityTargets,phaseQualityOrder,normalizeDiscipline,normalizeLimiter,aerobicFocus} from './src/engine/discipline-policy.js';
 import {buildSkillProfile,describeMetric,skillLevel} from './src/engine/skill-profile.js';
 import { raceWeekCount } from './src/engine/event-plan.js';
 // Les 39 – geïntegreerde gebruikersinterface voor bestaande Supabase- en workoutmodellen.
@@ -677,7 +677,7 @@ async function proposeWeek(){
       const prev=prepared.find(item=>item.start===prevStart)?.merged??sessions(prevStart);
       const next=sessions(nextStart);
       const boundary=boundaryBlocks({dates,previous:prev,next});
-      const estimates=new Map(),phaseIndex=app.plan.weeks.filter(w=>w.phase===week.phase&&w.start<week.start).length,discipline=normalizeDiscipline(app.plan.discipline),priorities=Object.fromEntries(disciplineTargets(discipline).map(x=>[x.skill,x.target]));
+      const estimates=new Map(),phaseIndex=app.plan.weeks.filter(w=>w.phase===week.phase&&w.start<week.start).length,discipline=normalizeDiscipline(app.plan.discipline),position=phasePosition(app.plan.weeks,week),priorities=Object.fromEntries(phaseAbilityTargets(discipline,week.phase,position).map(x=>[x.skill,x.target]));
       const templateLevel=t=>FEEDBACK_TYPES.includes(t.type)?recommendLevel(t.type,plannedLevel,feedback,now,t.id).level:1;
       const candidateCache=new Map();
       const candidates=(type,durationMinutes,date)=>{const k=type+':'+durationMinutes+':'+date;if(!candidateCache.has(k)){const rows=libraryCandidates({type,phase:week.phase,discipline,priorities,weekIndex:phaseIndex,recent:feedback,levelFor:templateLevel,durationMinutes,date});candidateCache.set(k,rows);}return candidateCache.get(k);};
@@ -688,7 +688,7 @@ async function proposeWeek(){
       const allowCandidate=fitness&&prior?(s,existing)=>{const ok=fitnessCandidateAllowed({...fitness,prior,existing:existing.map(asLoad),candidate:asLoad(s),end:dates[6]});if(!ok)fatigueRejected++;return ok;}:null;
       const result=proposeSkillWeek({dates:weekDates(weekStart),availability:usable,target:groupOnly?0:remainingTarget,
         maxQuality:groupOnly?0:phasePolicy.maxQualitySessions,blocked:[...new Set([...phasePolicy.blockedQualityDates,...boundary])],
-        qualityTypes:disciplineQualityOrder(app.plan.discipline,week.phase,app.plan.limiter,seen,app.plan.weeks.filter(w=>w.phase===week.phase&&w.start<week.start).length),phase:week.phase,preferLong:aerobicFocus(app.plan.discipline,week.phase,app.plan.limiter),
+        qualityTypes:phaseQualityOrder(app.plan.discipline,week.phase,app.plan.limiter,seen,position,phaseIndex),phase:week.phase,preferLong:aerobicFocus(app.plan.discipline,week.phase,app.plan.limiter),
         sessionCandidates:candidates,sessionLoad:exactLoad,allowCandidate,
         fixed:groups,groupIntensity,reserved,restDates,reservedLoadFor:s=>workoutInfo(s,week).load??NaN,groupLoadFor:(durationMinutes,groupIntensity)=>workoutInfo({type:'endurance',group:true,groupIntensity,durationMinutes},week).load??NaN,
         loadFor:(type,durationMinutes)=>{const k=type+':'+durationMinutes;if(!estimates.has(k))estimates.set(k,workoutInfo(candidateSession(type,durationMinutes,levelFor(type),week.phase),week).load??NaN);return estimates.get(k);}
