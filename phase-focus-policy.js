@@ -5,7 +5,7 @@
  * remain authoritative in their own separate roles.
  */
 export const PHASE_FOCUS = Object.freeze({
-  Base: Object.freeze({focus:'Aerobe basis',maxQuality:1,qualityTypes:['threshold','vo2max'],description:'Duur heeft voorrang; maximaal één aanvullende kwaliteitstraining.'}),
+  Base: Object.freeze({focus:'Aerobe basis',maxQuality:2,qualityTypes:['threshold','vo2max'],description:'Aerobe basis met één à twee gerichte prikkels indien haalbaar.'}),
   Build: Object.freeze({focus:'Gerichte opbouw',maxQuality:2,qualityTypes:['vo2max','threshold'],description:'Maximaal twee gespreide kwaliteitstrainingen, als herstel en tijd dit toelaten.'}),
   Peak: Object.freeze({focus:'Frisheid en behoud van intensiteit',maxQuality:1,qualityTypes:['vo2max','threshold'],description:'Beperk de hoeveelheid intensief werk; geen extra intensiteit om Load te vullen.'}),
   Recovery: Object.freeze({focus:'Herstel',maxQuality:0,qualityTypes:['threshold','vo2max'],description:'Geen nieuw intensief werk in automatisch voorstel.'})

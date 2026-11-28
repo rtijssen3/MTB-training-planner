@@ -1,7 +1,7 @@
 // Fitness/fatigue are modeled loads, not physiological measurements or safety thresholds.
 // Default Intervals.icu time constants; the current API adapter does not expose athlete-specific constants.
 // Use yesterday's end-of-day wellness to avoid counting today's load twice or anchoring to future plans.
-export const DEFAULT_LOAD_MODEL=Object.freeze({ctlDays:42,atlDays:7,caution:-10,reduced:-20,recovery:-30,reducedMax:30,recoveryMax:15});
+export const DEFAULT_LOAD_MODEL=Object.freeze({ctlDays:42,atlDays:7,caution:-20,reduced:-30,recovery:-35,reducedMax:30,recoveryMax:15});
 const dayMs=86400000;
 const utc=d=>{const n=Date.parse(d+'T00:00:00Z');if(!Number.isFinite(n)||new Date(n).toISOString().slice(0,10)!==d)throw Error('Ongeldige prognosedatum.');return n;};
 const shift=(d,n)=>new Date(utc(d)+n*dayMs).toISOString().slice(0,10);
@@ -37,7 +37,7 @@ export function forecastFitness({anchor,end,actual=new Map(),planned=[],settings
 // Candidate evaluates the entire remaining week, including protected group/manual
 // sessions, and the first week is carried into the next. Never remove protected
 // sessions. If a protected session itself causes low Form, show that warning;
-// an additional automatic session must not worsen a day below -30.
+// an additional automatic session must not worsen a day below the recovery threshold.
 export function fitnessCandidateAllowed({anchor,actual,prior=[],existing=[],candidate,end,settings=DEFAULT_LOAD_MODEL}){
  if(!anchor||!actual)return true;
  const before=forecastFitness({anchor,actual,end,planned:[...prior,...existing],settings});

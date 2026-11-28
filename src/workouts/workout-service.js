@@ -6,7 +6,7 @@ import {buildLibraryWorkout} from './library.js';
 export function workoutInfo(s,week){
  if(!s)return {load:null,workout:null,reason:'Geen training'};
  if(s.group||s.type==='group'){
-  try{const workout=createStructuredWorkout({type:'endurance',durationMinutes:s.durationMinutes,ftp:300,phase:'Opbouw',protocol:'classic'});return {load:estimateWorkoutTss(workout).estimatedTss,workout,reason:null,estimatedGroup:true};}catch(e){return {load:null,workout:null,reason:e.message};}
+  try{const workout=createStructuredWorkout({type:'endurance',durationMinutes:s.durationMinutes,ftp:300,phase:'Opbouw',protocol:'classic'});return {load:s.groupIntensity?Math.round(s.durationMinutes/60*100*({easy:.65,mixed:.75,hard:.85}[s.groupIntensity]??.75)**2):estimateWorkoutTss(workout).estimatedTss,workout,reason:null,estimatedGroup:true};}catch(e){return {load:null,workout:null,reason:e.message};}
  }
  try{
    const phase=s.prescribedPhase|| (week?.phase==='Recovery'?'Herstel':'Opbouw');
