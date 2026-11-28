@@ -37,7 +37,7 @@ export function forecastFitness({anchor,end,actual=new Map(),planned=[],settings
 // Candidate evaluates the entire remaining week, including protected group/manual
 // sessions, and the first week is carried into the next. Never remove protected
 // sessions. If a protected session itself causes low Form, show that warning;
-// an additional automatic session must not worsen a day below -30.
+// an additional automatic session must not worsen a day below the recovery threshold.
 export function fitnessCandidateAllowed({anchor,actual,prior=[],existing=[],candidate,end,settings=DEFAULT_LOAD_MODEL}){
  if(!anchor||!actual)return true;
  const before=forecastFitness({anchor,actual,end,planned:[...prior,...existing],settings});

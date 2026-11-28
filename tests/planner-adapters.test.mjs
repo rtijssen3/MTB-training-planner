@@ -10,6 +10,6 @@ test('real AvailabilityState feeds group ride into proposal even at zero remaini
  const dates=state.days.slice(0,7).map(d=>d.date);
  const availability=Object.fromEntries(dates.map(d=>[d,normalizePlannerAvailability(state.getEffective(d))]));
  const r=proposeSkillWeek({dates,availability,target:0,maxQuality:0,fixed:fixedGroupDates(availability,dates),loadFor:()=>50});
- assert.deepEqual(r.sessions,[{date:'2026-11-29',type:'endurance',group:true,durationMinutes:180,protocol:'classic'}]);
+ assert.deepEqual(r.sessions,[{date:'2026-11-29',type:'endurance',group:true,groupIntensity:'mixed',durationMinutes:180,protocol:'classic'}]);
 });
 test('discipline selection changes skill priorities without changing weeks',()=>{const a={discipline:'xco',limiter:'auto',weeks:[{phase:'Build'}]};const b=refreshFocus(a,{discipline:'gravel',limiter:'auto'},recalculateExposure);assert.notDeepEqual(priorities(a.discipline,'Build'),priorities(b.discipline,'Build'));assert.equal(a.weeks,b.weeks)});
