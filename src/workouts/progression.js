@@ -27,7 +27,7 @@ export function buildProgressiveWorkout({type,durationMinutes,ftp=300,level,phas
  return {type,title:TITLES[type],durationMinutes,ftp,phase,protocol:'progressive',level,steps,hardMinutes:steps.filter(s=>s.kind==='work').reduce((sum,s)=>sum+s.seconds,0)/60};
 }
 
-export function isQuality(session){return !!session&&(session.group||(session.protocol==='library'?!!getTemplate(session.templateId)?.quality:['threshold','vo2max','force','anaerobic','power'].includes(session.type)));}
+export function isQuality(session){return !!session&&((session.group?session.groupIntensity!=='easy':(session.protocol==='library'?!!getTemplate(session.templateId)?.quality:['threshold','vo2max','force','anaerobic','power'].includes(session.type))));}
 
 export function boundaryBlocks({dates,previous=[],next=[]}){
  const blocked=[];

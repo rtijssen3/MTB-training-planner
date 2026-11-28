@@ -120,7 +120,7 @@ export function buildLibraryWorkout({templateId,type,durationMinutes,level=1,ftp
 export function libraryForCategory(type){return WORKOUT_LIBRARY.filter(t=>type==='test'?t.test:!t.test&&t.type===type);}
 export function minimumDuration(t,level=1){const warm=(t.warmupSeconds??(t.quality||t.test?720:360))+(t.cooldownSeconds??(t.quality||t.test?480:240)),active=t.pattern?prescribedBlocks(t,level).reduce((n,s)=>n+s.seconds,0):0;return Math.max(t.min,15*Math.ceil((warm+active)/900));}
 export function libraryCandidates({type,phase,discipline,priorities={},weekIndex=0,recent=[],levelFor=()=>1,durationMinutes,date=''}){
- const suitable=WORKOUT_LIBRARY.filter(t=>!t.test&&(type==='recovery'?t.category==='recovery':t.type===type&&(phase==='Recovery'?t.category==='recovery'||t.type==='skills':t.category!=='recovery'))&&t.disciplines.includes(discipline)&&t.phases.includes(phase)&&durationMinutes>=t.min&&durationMinutes<=t.max);
+ const suitable=WORKOUT_LIBRARY.filter(t=>!t.test&&(type==='recovery'?t.category==='recovery':t.type===type&&(phase==='Recovery'?t.category==='recovery'||t.type==='skills':t.category!=='recovery'))&&t.disciplines.includes(discipline)&&(t.phases.includes(phase)||(phase==='Base'&&['vo2max','power'].includes(t.type)))&&durationMinutes>=t.min&&durationMinutes<=t.max);
  const scores=(t,i)=>{
   const recentRows=recent.filter(x=>x.templateId===t.id&&x.completed===true),last=recentRows[0],age=last?.date&&date?(Date.parse(date)-Date.parse(last.date))/86400000:Infinity,recentEnough=age>=0&&age<=21;
   const repeat=recentEnough&&recentRows.length===1&&['easy','good'].includes(last.rating)?3:0;
@@ -132,6 +132,6 @@ export function libraryCandidates({type,phase,discipline,priorities={},weekIndex
  };
  const ordered=suitable.map((t,i)=>({t,score:scores(t,i)})).sort((a,b)=>b.score-a.score);
  const result=[];
- for(const {t} of ordered){const desired=levelFor(t),level=t.levels.includes(desired)?desired:1;for(let n=level;n>=1;n--){if(!t.levels.includes(n)||durationMinutes<minimumDuration(t,n))continue;const session={type:t.type,durationMinutes,protocol:'library',templateId:t.id,level:n,prescribedPhase:phase==='Recovery'?'Herstel':'Opbouw'};try{buildLibraryWorkout({...session,phase:session.prescribedPhase});result.push(session);break;}catch{}}}
+ for(const {t} of ordered){const desired=levelFor(t),level=t.levels.includes(desired)?desired:1;for(let n=phase==='Base'&&weekIndex===0&&t.type==='vo2max'?1:level;n>=1;n--){if(!t.levels.includes(n)||durationMinutes<minimumDuration(t,n))continue;const session={type:t.type,durationMinutes,protocol:'library',templateId:t.id,level:n,prescribedPhase:phase==='Recovery'?'Herstel':'Opbouw'};try{buildLibraryWorkout({...session,phase:session.prescribedPhase});result.push(session);break;}catch{}}}
  return result;
 }

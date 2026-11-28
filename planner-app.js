@@ -655,6 +655,7 @@ async function proposeWeek(){
       const restDates=store().manualRestDates(weekStart).filter(d=>d>=now);
       const reservedDates=new Set([...reserved.map(s=>s.date),...restDates]);
       for(const day of reservedDates)if(usable[day])usable[day].available_minutes=0;
+      const groupIntensity=localStorage.getItem('mtb-group-intensity:'+app.userId)||'mixed';
       const groups=fixedGroupDates(availability,weekDates(weekStart)).filter(d=>usable[d]?.available_minutes>=15);
       if(reservedDates.size)warnings.push(`Week ${weekNumber(weekStart)}: ${reservedDates.size} handmatig aangepaste dag(en) behouden.`);
       if(!reservedDates.size&&!groups.length&&!Object.values(usable).some(v=>v.available_minutes>=15)&&!groupOnly){
@@ -680,7 +681,7 @@ async function proposeWeek(){
       const templateLevel=t=>FEEDBACK_TYPES.includes(t.type)?recommendLevel(t.type,plannedLevel,feedback,now,t.id).level:1;
       const candidateCache=new Map();
       const candidates=(type,durationMinutes,date)=>{const k=type+':'+durationMinutes+':'+date;if(!candidateCache.has(k)){const rows=libraryCandidates({type,phase:week.phase,discipline,priorities,weekIndex:phaseIndex,recent:feedback,levelFor:templateLevel,durationMinutes,date});candidateCache.set(k,rows);}return candidateCache.get(k);};
-      const exactLoad=s=>{const k=[s.type,s.durationMinutes,s.protocol,s.templateId,s.level,s.prescribedPhase,s.group].join(':');if(!estimates.has(k))estimates.set(k,workoutInfo(s,week).load??NaN);return estimates.get(k);};
+      const exactLoad=s=>{const k=[s.type,s.durationMinutes,s.protocol,s.templateId,s.level,s.prescribedPhase,s.group,s.groupIntensity].join(':');if(!estimates.has(k))estimates.set(k,workoutInfo(s,week).load??NaN);return estimates.get(k);};
       const prior=forecastPlanned(fitness,weekStart,prepared);
       let fatigueRejected=0;
       const asLoad=s=>({date:s.date,load:exactLoad(s),quality:isQuality(s),recovery:getTemplate(s.templateId)?.category==='recovery'});
@@ -689,7 +690,7 @@ async function proposeWeek(){
         maxQuality:groupOnly?0:phasePolicy.maxQualitySessions,blocked:[...new Set([...phasePolicy.blockedQualityDates,...boundary])],
         qualityTypes:disciplineQualityOrder(app.plan.discipline,week.phase,app.plan.limiter,seen,app.plan.weeks.filter(w=>w.phase===week.phase&&w.start<week.start).length),phase:week.phase,preferLong:aerobicFocus(app.plan.discipline,week.phase,app.plan.limiter),
         sessionCandidates:candidates,sessionLoad:exactLoad,allowCandidate,
-        fixed:groups,reserved,restDates,reservedLoadFor:s=>workoutInfo(s,week).load??NaN,groupLoadFor:durationMinutes=>workoutInfo({type:'endurance',group:true,durationMinutes},week).load??NaN,
+        fixed:groups,groupIntensity,reserved,restDates,reservedLoadFor:s=>workoutInfo(s,week).load??NaN,groupLoadFor:(durationMinutes,groupIntensity)=>workoutInfo({type:'endurance',group:true,groupIntensity,durationMinutes},week).load??NaN,
         loadFor:(type,durationMinutes)=>{const k=type+':'+durationMinutes;if(!estimates.has(k))estimates.set(k,workoutInfo(candidateSession(type,durationMinutes,levelFor(type),week.phase),week).load??NaN);return estimates.get(k);}
       });
       const projection=fitness&&prior?forecastFitness({...fitness,planned:[...prior,...result.sessions.map(asLoad)],end:dates[6]}):null;
@@ -701,10 +702,10 @@ async function proposeWeek(){
       if(!result.unknownFixed&&shortfall>=1)warnings.push(`Week ${weekNumber(weekStart)}: voorstel ${num(result.estimatedKnownLoad)} / ${num(budget)} TSS (nog ${num(shortfall)} binnen het voorstelbudget). ${freeDates.length?'Geen extra passende sessie binnen beschikbaarheid, resterend TSS-budget en herstelregels.':'Geen extra beschikbare dagen.'}`);
       if(!result.unknownFixed&&budget<week.targetLoad-completedLoad&&weekStart!==currentWeek)warnings.push(`Week ${weekNumber(weekStart)}: effectief automatisch voorstelbudget ${num(budget)} TSS; mesocycledoel ${num(week.targetLoad)} TSS.`);
       if(result.estimatedKnownLoad>(groupOnly?0:remainingTarget)+.01)warnings.push(`Week ${weekNumber(weekStart)}: vaste/handmatige workouts overschrijden het resterende automatische TSS-budget; ze blijven behouden.`);
-      if(groups.length)warnings.push('Groepsrit meegerekend als Z2-schatting; herstel conservatief behandeld.');
+      if(groups.length)warnings.push('Groepsrit meegerekend volgens gekozen intensiteitsprofiel; gemengd en zwaar tellen als kwaliteit.');
       const suggestions=result.sessions
         .filter(s=>s.date>=now && !occupiedDates.includes(s.date))
-         .map(s=>s.manual===true||s.protocol==='library'?s:({date:s.date,...candidateSession(s.type,s.durationMinutes,levelFor(s.type),week.phase),group:!!s.group}));
+         .map(s=>s.manual===true||s.protocol==='library'||s.group?s:({date:s.date,...candidateSession(s.type,s.durationMinutes,levelFor(s.type),week.phase),group:!!s.group}));
       if(!suggestions.length&&!groupOnly&&!reservedDates.size)warnings.push(`Week ${weekNumber(weekStart)}: geen passende trainingen mogelijk; oude automatische toekomstige workouts worden bij bevestiging verwijderd.`);
       const preservedToday=existing.filter(s=>s.date===now && occupiedDates.includes(s.date));
       prepared.push({start:weekStart,suggestions,existing,
@@ -1070,6 +1071,9 @@ function registerListeners(){
   $('l39-month-next').addEventListener('click',()=>{app.month=new Date(app.month.getFullYear(),app.month.getMonth()+1,1);loadCalendar()});
   $('l39-month-today').addEventListener('click',()=>{app.month=new Date(today().getFullYear(),today().getMonth(),1);app.selectedCalendarDate=nowKey();loadCalendar()});
   $('l39-plan-form').addEventListener('submit',generatePlan);$('l39-plan-save').addEventListener('click',savePlan);
+  $('l39-engine-example').addEventListener('change',()=>{for(const e of document.querySelectorAll('.engine-example'))e.hidden=e.dataset.example!==$('l39-engine-example').value;});
+  $('l39-engine-info').addEventListener('click',()=>{const select=$('l39-group-intensity');select.value=localStorage.getItem('mtb-group-intensity:'+app.userId)||'mixed';$('l39-engine-dialog').showModal();});
+  $('l39-group-intensity').addEventListener('change',()=>{if(app.userId)localStorage.setItem('mtb-group-intensity:'+app.userId,$('l39-group-intensity').value);});
   $('l39-new-plan').addEventListener('click',()=>{if(!app.planDirty||confirm('Een nieuw concept beginnen? Je huidige onbewaarde concept wordt pas vervangen na toepassen.'))openPlanDialog('new');});
   $('l39-edit-plan').addEventListener('click',()=>openPlanDialog('edit'));
   $('l39-plan-discard').addEventListener('click',discardPlan);

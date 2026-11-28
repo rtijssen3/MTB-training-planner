@@ -15,7 +15,8 @@ export function disciplineQualityOrder(d,phase,limiter='auto',seen=[],weekIndex=
  if(phase==='Recovery')return [];
  const choices=R[normalizeDiscipline(d)][phase];if(!choices)throw Error('Onbekende fase');
  const types=[...choices[((Math.max(0,weekIndex)%choices.length)+choices.length)%choices.length]],focus=TYPE[normalizeLimiter(limiter)];
- // No high-intensity introduction during Base, even with manual focus.
+ // Maintain selected intensity throughout Base; later Base emphasizes VO2 and threshold.
+ if(phase==='Base'){const order=normalizeDiscipline(d)==='xco'?(weekIndex===0?['force','vo2max','threshold']:['vo2max','threshold','force']):['threshold','vo2max','force'];return order.sort((a,b)=>Number(seen.includes(a))-Number(seen.includes(b))||Number(b===focus)-Number(a===focus));}
  return types.sort((a,b)=>Number(seen.includes(a))-Number(seen.includes(b))||Number(b===focus)-Number(a===focus));
 }
 export function aerobicFocus(d,phase,limiter){return phase!=='Recovery'&&(normalizeDiscipline(d)==='gravel'||limiter==='aerobic');}
